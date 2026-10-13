@@ -1,0 +1,150 @@
+{
+  "title": "Dawghouse",
+  "subtitle": "Halloween",
+  "bpm": 120,
+  "theme": {
+    "accent": "#ff6a10",
+    "bg": "#070100"
+  },
+  "displays": [
+    {
+      "id": "main",
+      "role": "visuals",
+      "monitor": "primary",
+      "scene": "05",
+      "overlays": [
+        "nowplaying",
+        "lyrics"
+      ],
+      "audio": true,
+      "audioSource": "loopback"
+    },
+    {
+      "id": "videos",
+      "role": "videos",
+      "monitor": "secondary",
+      "mode": "video",
+      "scene": "06"
+    },
+    {
+      "id": "control",
+      "role": "control",
+      "monitor": "internal"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "01",
+      "title": "Slime Pour",
+      "palette": [
+        "#7bff7b",
+        "#b6ff3a",
+        "#1aff8c"
+      ]
+    },
+    {
+      "id": "02",
+      "title": "Chrome Emblem",
+      "palette": [
+        "#bcd4ff",
+        "#4aa8ff",
+        "#ff8a3a"
+      ]
+    },
+    {
+      "id": "03",
+      "title": "Haunted Tunnel",
+      "palette": [
+        "#c9a4ff",
+        "#8a2bff",
+        "#ff4fd8"
+      ]
+    },
+    {
+      "id": "04",
+      "title": "Molten Type",
+      "palette": [
+        "#ff6a10",
+        "#ffb060",
+        "#ff3a00"
+      ]
+    },
+    {
+      "id": "05",
+      "title": "Neon Club Sign",
+      "palette": [
+        "#ff2fa0",
+        "#4a5cff",
+        "#8a2bff"
+      ]
+    },
+    {
+      "id": "06",
+      "title": "Neon Jack-o-Lantern",
+      "palette": [
+        "#ffa050",
+        "#ff6a10",
+        "#ffd23a"
+      ]
+    },
+    {
+      "id": "07",
+      "title": "Stadium Portal",
+      "palette": [
+        "#9fe8ff",
+        "#2f6bff",
+        "#ffffff"
+      ]
+    }
+  ],
+  "homeassistant": {
+    "mode": "sync",
+    "brightness": 180,
+    "profile": "upstairs",
+    "profiles": {
+      "upstairs": [
+        {
+          "name": "strips",
+          "kind": "wled",
+          "entities": [
+            "light.bed_led_strip",
+            "light.dresser_lights"
+          ],
+          "effects": {
+            "04": "Fire 2012"
+          }
+        },
+        {
+          "name": "bulbs",
+          "kind": "bulb",
+          "entities": [
+            "light.smart_rgbtw_bulb_3",
+            "light.smart_rgbtw_bulb_4",
+            "light.smart_rgbtw_bulb_5"
+          ]
+        }
+      ],
+      "downstairs": [
+        {
+          "name": "strips",
+          "kind": "wled",
+          "entities": [
+            "light.window_strip",
+            "light.kitchen_strip_led_strip"
+          ]
+        },
+        {
+          "name": "bulbs",
+          "kind": "bulb",
+          "entities": [
+            "light.living_room_light",
+            "light.living_room_lamp",
+            "light.smart_rgbtw_bulb",
+            "light.smart_rgbtw_bulb_2",
+            "light.smart_rgbtw_bulb_8"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "oneparty",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Party visuals hub: Spotify now-playing + lyrics, Home Assistant lighting, live multi-monitor visuals.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server/index.mjs",
+    "party": "node server/index.mjs --launch",
+    "doctor": "node tools/doctor.mjs",
+    "test": "node --test server/"
+  }
+}

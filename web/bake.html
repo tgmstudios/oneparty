@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><title>oneparty bake</title>
+<script type="importmap">{"imports":{"three":"/vendor/three/build/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}</script>
+<style>html,body{margin:0;background:#000}</style></head><body>
+<script type="module">
+// Records one seamless scene loop to cache/<event>/<scene>.webm (VP9) for replay on weak GPUs or as a video channel.
+// Frames are stepped at exactly 30fps wall-clock so MediaRecorder timestamps are right (an 8s loop takes ~8s).
+const q = new URLSearchParams(location.search), sceneId = q.get('scene');
+const W = +q.get('w') || 1920, H = +q.get('h') || 1080, FPS = 30, DUR = +q.get('dur') || 8;
+const done = m => parent.postMessage(m, '*');
+try {
+  const lib = await import('/engine/lib.js');
+  const S = await fetch('/api/state').then(r => r.json());
+  const stage = lib.makeStage(W, H);
+  const [block, script] = await Promise.all([lib.loadFont('/assets/fonts/Lato-Black.ttf'), lib.loadFont('/assets/fonts/Z003-MediumItalic.otf')]);
+  const inst = await (await import(`/engine/scenes/${sceneId}.js`)).build(stage, { W, H, q: new URLSearchParams(), fonts: { block, script }, event: S.event });
+  const canvas = stage.renderer.domElement, stream = canvas.captureStream(0), track = stream.getVideoTracks()[0];
+  const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 12_000_000 });
+  const chunks = []; rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  const stopped = new Promise(r => rec.onstop = r);
+  rec.start();
+  const total = FPS * DUR, t0 = performance.now();
+  for (let f = 0; f < total; f++) {
+    inst.update(f / total, f); stage.dither.uniforms.uF.value = f % 97; stage.composer.render(); track.requestFrame();
+    const wait = t0 + (f + 1) * 1000 / FPS - performance.now(); if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  }
+  rec.stop(); await stopped;
+  const r = await fetch(`/api/bake?scene=${sceneId}`, { method: 'POST', body: new Blob(chunks, { type: 'video/webm' }) });
+  stage.dispose(); done(r.ok ? { baked: sceneId } : { error: 'upload ' + r.status });
+} catch (e) { console.error(e); done({ error: String(e), baked: sceneId }); }
+</script></body></html>

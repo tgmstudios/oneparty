@@ -1,0 +1,78 @@
+<!doctype html><html><head><meta charset="utf-8"><title>oneparty control</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#0c0a10;--card:#171320;--line:#2a2338;--fg:#eee;--mut:#9a90b0;--acc:#ff6a10}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px system-ui,sans-serif;padding:16px}
+h1{font-size:18px;margin:0 0 12px}h2{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin:0 0 8px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+button,select,input{font:inherit;color:var(--fg);background:#241d33;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+button{cursor:pointer}button:hover{border-color:var(--acc)}button.on{background:var(--acc);color:#000;border-color:var(--acc);font-weight:700}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;align-items:center}
+.np{display:flex;gap:10px;align-items:center}.np img{width:56px;height:56px;border-radius:6px;background:#222}
+.sw{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:2px}
+.mut{color:var(--mut)}.big{font-size:18px;font-weight:700}#blk.on{background:#c00;border-color:#c00;color:#fff}
+.meter{height:8px;background:#241d33;border-radius:4px;overflow:hidden}.meter i{display:block;height:100%;background:var(--acc);width:0}
+</style></head><body>
+<h1 id="title">oneparty</h1>
+<div class="grid">
+  <div class="card"><h2>Now playing</h2><div class="np"><img id="art"><div><div class="big" id="ttl">Nothing playing</div><div class="mut" id="art-name"></div></div></div>
+    <div class="row" style="margin-top:10px"><a id="sp" href="/auth/spotify/login" target="_blank" style="color:var(--acc)">Connect Spotify</a><span class="mut" id="sp-st"></span></div>
+    <div class="meter"><i id="lvl"></i></div></div>
+  <div class="card"><h2>Tempo</h2><div class="row"><button id="tap">Tap tempo</button><input id="bpm" type="number" min="60" max="200" style="width:80px"><span class="mut">BPM (one loop = 16 beats)</span></div>
+    <div class="row"><button id="blk">Blackout</button><button id="launch">Launch displays</button></div></div>
+  <div class="card"><h2>Lighting (Home Assistant)</h2><div class="mut" id="ha-st"></div>
+    <div class="row" id="lmode"></div>
+    <div class="row"><input id="lcol" type="color" value="#ff6a10"><button id="lset">Set colour</button><button id="lflash">Flash</button></div></div>
+  <div class="card"><h2>Clips</h2><div class="row"><input id="yt" placeholder="YouTube / video URL" style="flex:1;min-width:0"><button id="ytgo">Download</button></div><div class="mut" id="yt-st">Saved to media/&lt;event&gt;/ and picked up by video channels.</div></div>
+  <div class="card"><h2>Cache</h2><div class="mut" id="cache-st">…</div>
+    <div class="row"><button id="bake">Bake all scenes (background)</button></div><iframe id="baker" style="display:none"></iframe></div>
+</div>
+<div id="channels" class="grid" style="margin-top:12px"></div>
+<script type="module">
+import { connect, cmd, trackPosMs } from '/js/bus.js';
+const $ = s => document.querySelector(s); let S = null, cached = [];
+const refreshCache = () => fetch('/api/cache').then(r => r.json()).then(c => { cached = c; $('#cache-st').textContent = c.length ? `${c.length} baked: ${c.map(f => f.replace('.webm', '')).join(', ')}` : 'nothing baked yet'; if (S) render(); });
+function render() {
+  $('#title').textContent = `${S.event.title} — ${S.event.subtitle || ''}`;
+  $('#bpm').value = Math.round(S.bpm); $('#blk').classList.toggle('on', S.blackout);
+  $('#sp').style.display = S.spotify.authed ? 'none' : ''; $('#sp-st').textContent = S.spotify.enabled ? (S.spotify.authed ? 'Spotify connected' : '') : 'set SPOTIFY_CLIENT_ID in .env';
+  $('#ha-st').textContent = S.ha.enabled ? `${S.ha.groups.map(g => `${g.name} (${g.kind}, ${g.n})`).join(' · ') || 'no lights configured'}` : 'Not configured (HA_URL / HA_TOKEN in .env)';
+  $('#lmode').innerHTML = ['sync', 'manual', 'off'].map(m => `<button data-m="${m}" class="${S.lights.mode === m ? 'on' : ''}">${m}</button>`).join('');
+  $('#channels').innerHTML = Object.entries(S.channels).filter(([, c]) => c.role !== 'control').map(([id, c]) => `
+    <div class="card"><h2>${id} · ${c.role}</h2>
+      <div class="row">${['live', 'cached', 'video'].map(m => `<button data-ch="${id}" data-mode="${m}" class="${c.mode === m ? 'on' : ''}">${m}</button>`).join('')}</div>
+      <div class="row">${S.scenes.map(s => `<button data-ch="${id}" data-scene="${s.id}" class="${c.scene === s.id ? 'on' : ''}">${(s.palette || []).slice(0, 3).map(p => `<span class="sw" style="background:${p}"></span>`).join('')}${s.title}${cached.includes(s.id + '.webm') ? ' ●' : ''}</button>`).join('')}</div>
+    </div>`).join('');
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.scene) cmd({ type: 'scene', channel: b.dataset.ch, scene: b.dataset.scene, mode: S.channels[b.dataset.ch].mode === 'video' ? 'live' : undefined });
+  else if (b.dataset.mode) cmd({ type: 'mode', channel: b.dataset.ch, mode: b.dataset.mode });
+  else if (b.dataset.m) cmd({ type: 'lights', mode: b.dataset.m });
+});
+$('#blk').onclick = () => cmd({ type: 'blackout', on: !S.blackout });
+$('#launch').onclick = () => fetch('/api/launch', { method: 'POST' });
+$('#ytgo').onclick = () => { fetch('/api/fetch', { method: 'POST', body: JSON.stringify({ url: $('#yt').value }) }).then(r => r.json()).then(r => r.error && ($('#yt-st').textContent = r.error)); };
+$('#bpm').onchange = e => cmd({ type: 'bpm', bpm: e.target.value });
+$('#lset').onclick = () => cmd({ type: 'lights', mode: 'manual', color: $('#lcol').value });
+$('#lflash').onclick = () => cmd({ type: 'flash', color: $('#lcol').value });
+let taps = []; $('#tap').onclick = () => { const n = performance.now(); taps = taps.filter(t => n - t < 3000); taps.push(n); if (taps.length > 3) cmd({ type: 'bpm', bpm: Math.round(60000 / ((taps.at(-1) - taps[0]) / (taps.length - 1))) }); };
+// background bake queue: one hidden iframe at a time so it never fights the live displays for long
+$('#bake').onclick = async () => {
+  const todo = S.scenes.map(s => s.id).filter(i => !cached.includes(i + '.webm'));
+  for (const sceneId of todo) {
+    $('#cache-st').textContent = `baking ${sceneId}…`;
+    await new Promise(res => { const f = $('#baker'); const h = e => { if (e.data?.baked === sceneId || e.data?.error) { removeEventListener('message', h); res(); } }; addEventListener('message', h); f.src = `/bake.html?scene=${sceneId}`; });
+  }
+  refreshCache();
+};
+connect({
+  state: s => { S = s; render(); },
+  track: ({ track }) => { $('#ttl').textContent = track?.title || 'Nothing playing'; $('#art-name').textContent = track ? track.artists.join(', ') : ''; if (track?.art) $('#art').src = track.art; },
+  audio: a => { $('#lvl').style.width = Math.min(100, a.level * 160) + '%'; },
+  cache: refreshCache,
+  fetch: f => { $('#yt-st').textContent = f.error || (f.done ? 'Downloaded.' : f.line || ''); },
+});
+refreshCache();
+</script></body></html>

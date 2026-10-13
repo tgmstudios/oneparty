@@ -1,0 +1,29 @@
+# secrets / credentials
+.env
+.env.*
+!.env.example
+.spotify-token.json
+
+# generated / user media (baked loops, downloaded clips)
+cache/
+media/
+*.webm
+*.mp4
+
+# provenance source + archives
+_import/
+*.zip
+
+# runtime
+.browser-profiles/
+node_modules/
+*.log
+npm-debug.log*
+
+# local tooling / OS / editors
+.claude/settings.local.json
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
