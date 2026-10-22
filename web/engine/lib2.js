@@ -86,4 +86,24 @@ export function skyGradient(stops, z = -60, w = 260, h = 140) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, fog: false, depthWrite: false, toneMapped: false }));
   m.position.z = z; m.renderOrder = -10; return m;
 }
+/** (bands = 16 analyzer bands 0..1, low -> high; synthetic in bakes) music state for a scene's update(t): the live feed from the display host (window.oneAudio) or, in bakes/previews with no audio, a synthetic
+ *  beat grid derived from t (16 beats per loop, 4 bars; hue steps a quarter turn per bar so loops stay seamless). Fields: bass mid high level
+ *  beat(0..1 pulse on the beat) phase(0..1 within beat) anticipate(0..1 ramp in the 30% before the next beat) bar(0..3) hue(turns, steps per bar, landing on the downbeat) */
+export function music(t) {
+  const m = typeof window !== 'undefined' && window.oneAudio; if (m) return m;
+  const b = t * 16, ph = b % 1, u = (b % 4) / 4, sm = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x), pulse = Math.exp(-ph * 5) * 0.8;
+  const bands = Array.from({ length: 16 }, (_, i) => Math.min(1, 0.12 + 0.75 * pulse * Math.exp(-i / 5) + 0.28 * Math.max(0, Math.sin(2 * Math.PI * (b / 2 - i / 16))) * (0.4 + i / 24)));
+  const kick = Math.exp(-ph * 6), snare = Math.floor(b) % 2 === 1 ? Math.exp(-ph * 8) : 0, hat = 0.7 * Math.exp(-((ph + 0.5) % 1) * 14), hit = Array.from({ length: 16 }, (_, i) => i < 4 ? kick : i < 11 ? snare : hat);
+  return { bands, env: bands, hit, kick, snare, hat, bass: pulse * 0.8, mid: 0.2, high: 0.15 + 0.2 * pulse, level: 0.3 + 0.2 * pulse, beat: pulse, phase: ph, bar: Math.floor(b) % 4,
+    anticipate: sm((ph - 0.7) / 0.3), hue: 0.25 * (Math.floor(b / 4) + sm((u - 0.85) / 0.15)), locked: false, conf: 0 };
+}
+/** Background clock in loops, driven by the control panel's Speed setting (window.oneAudio.speed). Foreground keeps using t; scenes advance
+ *  their background (flip waves, orbits, cubes, camera) with `const bg = clk(t)`. With no host (bakes/previews) it is exactly t, so loops stay seamless. */
+export function bgClock() {
+  let last = null, acc = 0;
+  return t => {
+    const m = typeof window !== 'undefined' && window.oneAudio; if (!m) return t;
+    if (last === null) last = t; let d = t - last; d -= Math.round(d); last = t; acc += d * (m.speed ?? 1); return acc;
+  };
+}
 export { TAU };

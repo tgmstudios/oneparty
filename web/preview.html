@@ -1,0 +1,77 @@
+<!doctype html><html><head><meta charset="utf-8"><title>oneparty preview</title>
+<script type="importmap">{"imports":{"three":"/vendor/three/build/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}</script>
+<style>html,body{margin:0;background:#000}</style></head><body>
+<script type="module">
+// Off-air scene check: builds a scene (draft or live) in its own window, renders it at several loop positions with a chosen audio profile,
+// measures it (blank / clipped / static / seam / ms per frame / console errors) and posts a contact sheet + metrics to the hub. Never touches a display channel.
+const q = new URLSearchParams(location.search), job = q.get('job'), sceneId = q.get('scene'), draft = q.get('draft') === '1';
+const W = +q.get('w') || 960, H = +q.get('h') || 540, TS = (q.get('t') || '0,0.25,0.5,0.75').split(',').map(Number), PROFILE = q.get('audio') || 'synth';
+const errors = [];
+addEventListener('error', e => errors.push('uncaught: ' + e.message));
+addEventListener('unhandledrejection', e => errors.push('unhandled: ' + (e.reason?.stack || e.reason)));
+const origErr = console.error; console.error = (...a) => { errors.push('console.error: ' + a.map(String).join(' ').slice(0, 300)); origErr(...a); };
+const post = (qs, body) => fetch(`/api/preview?job=${job}&${qs}`, { method: 'POST', body });
+const finish = r => post('final=1', JSON.stringify({ errors, ...r })).catch(() => {});
+
+// audio profiles drive window.oneAudio the way the display host does. 'synth' leaves it unset (scene falls back to its synthetic beat grid, like a bake).
+const PROFILES = {
+  silent: () => ({ bass: 0, mid: 0, high: 0, level: 0, beat: 0 }),
+  quiet:  t => ({ bass: 0.2, mid: 0.2, high: 0.15, level: 0.2, beat: 0.1 * Math.exp(-((t * 16) % 1) * 5) }),
+  loud:   t => { const ph = (t * 16) % 1, p = Math.exp(-ph * 5); return { bass: 0.55 + 0.4 * p, mid: 0.6, high: 0.5 + 0.3 * p, level: 0.7, beat: p }; },
+};
+const setAudio = t => {
+  if (PROFILE === 'synth') { delete window.oneAudio; return; }
+  const b = t * 16, ph = b % 1, u = (b % 4) / 4, sm = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+  window.oneAudio = { ...PROFILES[PROFILE](t), phase: ph, bar: Math.floor(b) % 4, anticipate: sm((ph - 0.7) / 0.3), hue: 0.25 * (Math.floor(b / 4) + sm((u - 0.85) / 0.15)), locked: false, conf: 0, speed: 1, bpm: 120, until: 1 - ph };
+};
+
+try {
+  const lib = await import('/engine/lib.js');
+  const S = await fetch('/api/state').then(r => r.json());
+  const stage = lib.makeStage(W, H);
+  const [block, script] = await Promise.all([lib.loadFont('/assets/fonts/Lato-Black.ttf'), lib.loadFont('/assets/fonts/Z003-MediumItalic.otf')]);
+  const tb = performance.now();
+  const mod = await import(draft ? `/engine/drafts/${sceneId}.js?v=${Date.now()}` : `/engine/scenes/${sceneId}.js?v=${Date.now()}`);
+  const inst = await mod.build(stage, { W, H, q: new URLSearchParams(), fonts: { block, script }, event: S.event });
+  const buildMs = performance.now() - tb;
+  const cv = stage.renderer.domElement, c2 = document.createElement('canvas'); c2.width = W; c2.height = H;
+  const ctx = c2.getContext('2d', { willReadFrequently: true });
+  const grab = (t, f) => {   // render one frame and read it back in the same task (the GL buffer is only valid until the browser presents it)
+    setAudio(t); inst.update(t, f); stage.dither.uniforms.uF.value = f % 97; stage.composer.render();
+    ctx.drawImage(cv, 0, 0); return ctx.getImageData(0, 0, W, H).data;
+  };
+  const stats = d => {   // luminance stats on a 1/16 sample
+    let n = 0, sum = 0, dark = 0, hot = 0, nan = 0;
+    for (let i = 0; i < d.length; i += 64) { const l = (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255; n++; sum += l; if (l < 0.02) dark++; if (l > 0.98) hot++; }
+    return { mean: +(sum / n).toFixed(3), dark: +(dark / n).toFixed(3), hot: +(hot / n).toFixed(3) };
+  };
+  const diff = (a, b) => { let s = 0, n = 0; for (let i = 0; i < a.length; i += 64) { s += Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]); n += 3; } return +(s / n / 255).toFixed(4); };
+
+  const frames = [], datas = [];
+  for (let i = 0; i < TS.length; i++) { const d = grab(TS[i], i * 7); datas.push(d); frames.push({ t: TS[i], ...stats(d) }); }
+  const wrapA = grab(0, 0).slice(), wrapB = grab(1 - 1 / 480, 479);          // t=0 vs just-before-wrap: a seamless loop has near-identical frames
+  const seam = diff(wrapA, wrapB);
+  const meanDiffs = []; for (let i = 1; i < datas.length; i++) meanDiffs.push(diff(datas[i - 1], datas[i]));
+  const motion = meanDiffs.length ? +(meanDiffs.reduce((a, b) => a + b, 0) / meanDiffs.length).toFixed(4) : 0;
+
+  // contact sheet: all frames in a grid, labelled
+  const cols = Math.min(2, TS.length), rows = Math.ceil(TS.length / cols), sw = Math.min(W, 800), sh = Math.round(sw * H / W);
+  const sheet = document.createElement('canvas'); sheet.width = sw * cols; sheet.height = sh * rows; const sx = sheet.getContext('2d');
+  const tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H;
+  for (let i = 0; i < TS.length; i++) {
+    tmp.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(datas[i]), W, H), 0, 0);
+    const x = (i % cols) * sw, y = Math.floor(i / cols) * sh; sx.drawImage(tmp, x, y, sw, sh);
+    sx.fillStyle = 'rgba(0,0,0,.6)'; sx.fillRect(x, y, 90, 22); sx.fillStyle = '#fff'; sx.font = '14px monospace'; sx.fillText('t=' + TS[i], x + 6, y + 16);
+  }
+  const jpg = (c, qlt) => new Promise(r => c.toBlob(r, 'image/jpeg', qlt));
+  await post('sheet=1', await jpg(sheet, 0.85));
+  for (let i = 0; i < TS.length; i++) { tmp.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(datas[i]), W, H), 0, 0); await post('frame=' + i, await jpg(tmp, 0.9)); }
+
+  const N = 40; const t0 = performance.now();                                 // cost per frame (update + render + readback excluded as best we can)
+  for (let f = 0; f < N; f++) { setAudio(f / N); inst.update(f / N, f); stage.composer.render(); }
+  cv.getContext?.('webgl2')?.finish?.(); const msPerFrame = +((performance.now() - t0) / N).toFixed(2);
+  const gl = stage.renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info');
+  stage.dispose();
+  finish({ ok: true, scene: sceneId, draft, w: W, h: H, audio: PROFILE, buildMs: Math.round(buildMs), msPerFrame, seam, motion, frames, renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null });
+} catch (e) { console.error(e); finish({ ok: false, scene: sceneId, draft, error: String(e.stack || e) }); }
+</script></body></html>

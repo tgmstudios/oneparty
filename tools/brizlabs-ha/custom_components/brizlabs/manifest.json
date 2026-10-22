@@ -1,0 +1,10 @@
+{
+  "domain": "brizlabs",
+  "name": "BrizLabs Micro String Lights",
+  "version": "0.1.0",
+  "documentation": "https://github.com/Tuya-Community/tuya-ray-materials",
+  "integration_type": "device",
+  "config_flow": true,
+  "requirements": ["bleak>=0.22.0"],
+  "iot_class": "local_push"
+}

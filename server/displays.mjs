@@ -37,7 +37,7 @@ export function pickScreen(screens, monitor, used = new Set()) {
   return free[0];
 }
 
-function findBrowser() {
+export function findBrowser() {
   if (process.env.BROWSER_PATH) return process.env.BROWSER_PATH;
   const c = isWSL ? [
     '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe', '/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe',
@@ -56,19 +56,39 @@ function findBrowser() {
 }
 
 const children = [];
-export function launchWindow({ url, screen, id }) {
+// Main (non-helper) browser processes whose user-data-dir is ours for this id. Wildcards only, so no path-escaping pitfalls.
+const winMatch = id => `$_.CommandLine -like '*browser-profiles*${id}*' -and $_.CommandLine -notlike '*--type=*'`;
+export function windowPids(id) {
+  if (process.platform !== 'win32' || isWSL) return [];
+  try { return run('powershell', ['-NoProfile', '-Command', `Get-CimInstance Win32_Process | Where-Object { ${winMatch(id)} } | ForEach-Object { $_.ProcessId }`]).split(/\s+/).filter(Boolean).map(Number); } catch { return []; }
+}
+export function launchWindow({ url, screen, id, kiosk = false, size = null, force = false, screenCount = 1, hidden = false }) {
   const bin = findBrowser();
   if (!bin) return { error: 'No Chromium-based browser found. Install Chrome/Edge or set BROWSER_PATH in .env' };
   const winProfile = bin.endsWith('.exe') && isWSL ? `C:\\Temp\\oneparty-${id}` : path.join(ROOT, '.browser-profiles', id);
   const args = [
-    `--user-data-dir=${winProfile}`, `--app=${url}`, '--kiosk', '--no-first-run', '--no-default-browser-check',
-    '--autoplay-policy=no-user-gesture-required', '--use-fake-ui-for-media-stream', '--auto-select-desktop-capture-source=Entire screen', '--disable-session-crashed-bubble',
-    '--disable-infobars', '--disable-features=Translate', '--ignore-gpu-blocklist', '--enable-gpu-rasterization',
+    `--user-data-dir=${winProfile}`, `--app=${url}`, ...(kiosk ? ['--kiosk'] : []), '--no-first-run', '--no-default-browser-check', '--test-type',
+    '--autoplay-policy=no-user-gesture-required', `--auto-select-desktop-capture-source=${screenCount > 1 ? 'Screen 1' : 'Entire screen'}`,   // never --use-fake-ui-for-media-stream: it swaps real capture for a synthetic 'Fake audio' source
+    '--disable-session-crashed-bubble',
+    '--disable-infobars', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--disable-features=Translate', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--enable-zero-copy', '--enable-native-gpu-memory-buffers', '--enable-accelerated-video-decode', '--enable-features=CanvasOopRasterization', '--disable-software-rasterizer', ...(process.platform === 'win32' ? ['--use-gl=angle', '--use-angle=d3d11'] : []),
   ];
-  if (screen) args.push(`--window-position=${screen.x},${screen.y}`, `--window-size=${screen.w},${screen.h}`);
-  const p = spawn(bin, args, { stdio: 'ignore', detached: false });
-  p.on('error', () => {});
+  if (hidden) {   // helper jobs (bake, preview): headless = no window exists, so it can never appear over or steal focus from a fullscreen display
+    const i = args.findIndex(x => x.startsWith('--app=')); if (i > -1) args[i] = url;
+    args.push('--headless=new', '--mute-audio', `--window-size=${size?.w ?? 1280},${size?.h ?? 720}`);
+  } else if (screen && kiosk) args.push(`--window-position=${screen.x},${screen.y}`, `--window-size=${screen.w},${screen.h}`);
+  else if (screen) {   // dev mode: a normal ~60% window on the chosen monitor
+    const w = size?.w ?? Math.round(screen.w * 0.6), h = size?.h ?? Math.round(screen.h * 0.6);
+    args.push(`--window-position=${screen.x + 40},${screen.y + 40}`, `--window-size=${w},${h}`);
+  } else if (size) args.push(`--window-size=${size.w},${size.h}`);
+  const open = windowPids(id);
+  if (open.length && !force) return { reused: true, pid: open[0], bin };   // already open: it reconnects to the hub by itself
+  open.forEach(pid => killTree(pid));                                       // force: replace it
+  const p = spawn(bin, args, { stdio: 'ignore', detached: true });   // detached: windows outlive a hub restart
+  p.unref(); p.on('error', () => {});
   children.push(p);
   return { pid: p.pid, bin };
 }
-export const closeAll = () => children.forEach(c => { try { c.kill(); } catch { /* gone */ } });
+export function killTree(pid) {
+  try { if (process.platform === 'win32') execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' }); else process.kill(pid); } catch { /* gone */ }
+}
+export const closeAll = () => children.forEach(c => c.pid && killTree(c.pid));

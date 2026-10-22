@@ -1,0 +1,83 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Join as a display</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--acc:#ff6a10;--bg:#07060b;--line:rgba(255,255,255,.12);--fg:#f4f2f8;--mut:#9b93ad}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--fg);font:16px/1.45 Inter,"Segoe UI",system-ui,sans-serif}
+body{display:grid;place-items:center;padding:24px;background:radial-gradient(900px 500px at 20% -10%,color-mix(in srgb,var(--acc) 22%,transparent),transparent 60%),var(--bg)}
+main{width:min(440px,100%);display:grid;gap:18px}
+h1{margin:0;font-size:26px;letter-spacing:-.02em}
+p{margin:0;color:var(--mut)}
+label{display:grid;gap:6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+input,select,button{font:inherit;color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:rgba(255,255,255,.05);text-transform:none;letter-spacing:0}
+select option{color:#111}
+button{cursor:pointer;background:var(--acc);border-color:var(--acc);color:#120a04;font-weight:700}
+button.ghost{background:transparent;color:var(--fg);border-color:var(--line);font-weight:500}
+.card{display:grid;gap:14px;padding:22px;border:1px solid var(--line);border-radius:20px;background:rgba(255,255,255,.04)}
+.err{color:#ff8e9b;font-size:14px}
+[hidden]{display:none!important}
+</style></head><body>
+<main>
+  <div><h1 id="title">Join as a display</h1><p id="sub">This device will show the visuals. The hub controls what it plays.</p></div>
+
+  <form id="form" class="card" hidden>
+    <label>Name<input id="name" maxlength="40" placeholder="Upstairs TV" autocomplete="off"></label>
+    <label>Type
+      <select id="role">
+        <option value="visuals">Visuals - live scenes (this device's GPU renders them)</option>
+        <option value="mirror">Mirror - always shows what the main display shows</option>
+        <option value="videos">Videos - plays the clip playlist</option>
+      </select>
+    </label>
+    <button>Join</button>
+    <div id="err" class="err"></div>
+  </form>
+
+  <div id="auto" class="card" hidden>
+    <b id="who"></b>
+    <p>Connecting to the hub…</p>
+    <button type="button" id="change" class="ghost">Change this tab's name or type</button>
+    <p style="font-size:13px">Tip: open more tabs (or windows) on this address to add more displays from this device, each with its own scene.</p>
+    <div id="err2" class="err"></div>
+  </div>
+  <p id="tip" style="font-size:13px" hidden>Tip: once it is showing, double-click the screen for fullscreen (or F11).</p>
+</main>
+<script>
+const KEY = 'oneparty.device';
+const $ = s => document.querySelector(s);
+let dev; try { dev = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { dev = null; }
+const save = d => { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch { /* private mode: still works, but registers as new each time */ } };
+const guess = () => { const p = navigator.userAgentData?.platform || navigator.platform || 'Display'; return /win/i.test(p) ? 'Windows display' : /mac/i.test(p) ? 'Mac display' : /android/i.test(p) ? 'Android display' : /iphone|ipad|ios/i.test(p + navigator.userAgent) ? 'iOS display' : 'Display'; };
+
+// Every browser TAB is its own display: the device id (localStorage) is shared, the tab id (sessionStorage) is per tab. A new tab on a known
+// device joins automatically with the saved name/type and gets a numbered name ("Surface 2") and its own scene; a reload keeps its channel.
+let tab; try { tab = JSON.parse(sessionStorage.getItem('oneparty.tab') || 'null'); } catch { tab = null; }
+const rand = () => crypto.randomUUID?.() || Math.random().toString(36).slice(2) + Date.now();
+if (!tab?.tabId) tab = { tabId: rand().slice(0, 12), registered: false };
+const saveTab = () => { try { sessionStorage.setItem('oneparty.tab', JSON.stringify(tab)); } catch { /* ignore */ } };
+
+async function join(d) {
+  const r = await fetch('/api/register', { method: 'POST', body: JSON.stringify({
+    deviceId: d.deviceId, tabId: tab.tabId, name: d.name, role: d.role === 'mirror' ? 'visuals' : d.role, follow: d.role === 'mirror' ? 'main' : null, reconfigure: !!d.reconfigure && tab.registered,
+  }) }).then(x => x.json());
+  if (r.error) throw new Error(r.error);
+  save({ deviceId: d.deviceId, name: d.name, role: d.role });   // device defaults for the next tab
+  tab.registered = true; tab.id = r.id; saveTab();
+  location.replace(`/display.html?id=${encodeURIComponent(r.id)}&remote=1`);
+}
+
+const params = new URLSearchParams(location.search);
+if (dev?.deviceId && !params.has('setup')) {
+  $('#auto').hidden = false; $('#who').textContent = dev.name;
+  $('#change').onclick = () => { location.search = '?setup'; };
+  setTimeout(() => join(dev).catch(e => { $('#err2').textContent = 'Could not reach the hub: ' + e.message; }), 800);
+} else {
+  $('#form').hidden = false; $('#tip').hidden = false;
+  $('#name').value = dev?.name || guess(); if (dev?.role) $('#role').value = dev.role;
+  $('#form').onsubmit = async e => {
+    e.preventDefault(); $('#err').textContent = '';
+    const d = { deviceId: dev?.deviceId || rand(), name: $('#name').value.trim() || guess(), role: $('#role').value };
+    try { await join({ ...d, reconfigure: true }); } catch (err) { $('#err').textContent = 'Could not join: ' + err.message; }
+  };
+}
+</script></body></html>

@@ -1,0 +1,23 @@
+{
+  "id": "club-orange",
+  "name": "Club orange: strips hit, bulbs glide",
+  "notes": "Halloween neon. Strips (fast WLED) kick on every beat and flash toward white; room bulbs (slow, ~1 update/s) drift smoothly through the palette so they never strobe. Cues are optional and need Spotify progress; times are seconds into the song.",
+  "palette": ["#ff6a10", "#ff2fa0", "#7a1d8a", "#ffb060"],
+  "brightness": 150,
+  "motion": "chase",
+  "step": "beat",
+  "every": 2,
+  "beat": "flash",
+  "flashColor": "#fff2e0",
+  "depth": 0.6,
+  "decay": 0.3,
+  "level": 0.25,
+  "groups": {
+    "wled": { "every": 1, "depth": 0.8 },
+    "bulb": { "motion": "drift", "period": 24, "spread": 0.5, "beat": "none", "brightness": 170, "level": 0.15 }
+  },
+  "cues": [
+    { "at": 0, "label": "intro", "brightness": 90, "depth": 0.3, "groups": { "wled": { "motion": "drift", "period": 12 } } },
+    { "at": 45, "label": "drop", "brightness": 200, "depth": 0.9 }
+  ]
+}

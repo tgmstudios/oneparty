@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "oneparty": { "command": "node", "args": ["tools/mcp.mjs"] }
+  }
+}

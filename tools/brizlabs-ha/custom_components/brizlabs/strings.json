@@ -1,0 +1,7 @@
+{
+  "config": {
+    "step": {"user": {"title": "BrizLabs Micro String Lights", "data": {"address": "Bluetooth address", "name": "Name"}}},
+    "error": {"invalid_address": "Enter a Bluetooth MAC address"},
+    "abort": {"already_configured": "This light is already configured"}
+  }
+}

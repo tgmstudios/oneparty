@@ -14,7 +14,10 @@
       "scene": "05",
       "overlays": [
         "nowplaying",
-        "lyrics"
+        "lyrics",
+        "bubbles",
+        "announcements",
+        "motion"
       ],
       "audio": true,
       "audioSource": "loopback"
@@ -40,7 +43,12 @@
         "#7bff7b",
         "#b6ff3a",
         "#1aff8c"
-      ]
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 8,
+        "score": 7.5
+      }
     },
     {
       "id": "02",
@@ -49,7 +57,12 @@
         "#bcd4ff",
         "#4aa8ff",
         "#ff8a3a"
-      ]
+      ],
+      "hype": {
+        "busy": 6,
+        "jumpy": 7,
+        "score": 6.5
+      }
     },
     {
       "id": "03",
@@ -58,7 +71,12 @@
         "#c9a4ff",
         "#8a2bff",
         "#ff4fd8"
-      ]
+      ],
+      "hype": {
+        "busy": 5,
+        "jumpy": 4,
+        "score": 4.5
+      }
     },
     {
       "id": "04",
@@ -67,7 +85,12 @@
         "#ff6a10",
         "#ffb060",
         "#ff3a00"
-      ]
+      ],
+      "hype": {
+        "busy": 5,
+        "jumpy": 5,
+        "score": 5
+      }
     },
     {
       "id": "05",
@@ -76,7 +99,12 @@
         "#ff2fa0",
         "#4a5cff",
         "#8a2bff"
-      ]
+      ],
+      "hype": {
+        "busy": 5,
+        "jumpy": 5,
+        "score": 5
+      }
     },
     {
       "id": "06",
@@ -85,7 +113,12 @@
         "#ffa050",
         "#ff6a10",
         "#ffd23a"
-      ]
+      ],
+      "hype": {
+        "busy": 3,
+        "jumpy": 3,
+        "score": 3
+      }
     },
     {
       "id": "07",
@@ -94,7 +127,673 @@
         "#9fe8ff",
         "#2f6bff",
         "#ffffff"
-      ]
+      ],
+      "hype": {
+        "busy": 9,
+        "jumpy": 7,
+        "score": 8
+      }
+    },
+    {
+      "id": "08",
+      "title": "Island In The Sun",
+      "palette": [
+        "#ff6a10",
+        "#a3195b",
+        "#7a2aff"
+      ],
+      "hype": {
+        "busy": 3,
+        "jumpy": 2,
+        "score": 2.5
+      }
+    },
+    {
+      "id": "09",
+      "title": "Sunburst",
+      "palette": [
+        "#ff6a10",
+        "#ff3fa0",
+        "#7a1d8a"
+      ],
+      "hype": {
+        "busy": 4,
+        "jumpy": 4,
+        "score": 4
+      }
+    },
+    {
+      "id": "10",
+      "title": "Backflip Dawg",
+      "palette": [
+        "#ff6a10",
+        "#ff3fa0",
+        "#8a2bff"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 8,
+        "score": 8
+      }
+    },
+    {
+      "id": "11",
+      "title": "Flip Wall",
+      "palette": [
+        "#ff7a10",
+        "#9a86c8",
+        "#7a2aff"
+      ],
+      "hype": {
+        "busy": 9,
+        "jumpy": 8,
+        "score": 8.5
+      }
+    },
+    {
+      "id": "12",
+      "title": "Split-Flap",
+      "palette": [
+        "#ffa030",
+        "#ff3fa0",
+        "#140a04"
+      ],
+      "hype": {
+        "busy": 6,
+        "jumpy": 6,
+        "score": 6
+      }
+    },
+    {
+      "id": "13",
+      "title": "Monster Mash",
+      "palette": [
+        "#ff6a10",
+        "#ff2fa0",
+        "#40ff9a"
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 7,
+        "score": 7
+      }
+    },
+    {
+      "id": "14",
+      "title": "Ghost Disco",
+      "palette": [
+        "#40c8ff",
+        "#ff3fa0",
+        "#a060ff"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 9,
+        "score": 8.5
+      }
+    },
+    {
+      "id": "15",
+      "title": "Zombie Thriller",
+      "palette": [
+        "#80ff40",
+        "#a040ff",
+        "#ff6a20"
+      ],
+      "hype": {
+        "busy": 6,
+        "jumpy": 6,
+        "score": 6
+      }
+    },
+    {
+      "id": "16",
+      "title": "Mummy Mosh",
+      "palette": [
+        "#ffa030",
+        "#30c0c0",
+        "#ff3fa0"
+      ],
+      "hype": {
+        "busy": 6,
+        "jumpy": 5,
+        "score": 5.5
+      }
+    },
+    {
+      "id": "17",
+      "title": "Monster Ball",
+      "palette": [
+        "#ff3fa0",
+        "#ffc040",
+        "#c030ff"
+      ],
+      "hype": {
+        "busy": 9,
+        "jumpy": 9,
+        "score": 9
+      }
+    },
+    {
+      "id": "18",
+      "title": "Witches Coven",
+      "palette": [
+        "#40ff80",
+        "#9a40ff",
+        "#ff8a20"
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 6,
+        "score": 6.5
+      }
+    },
+    {
+      "id": "19",
+      "title": "Frankensteins Lab",
+      "palette": [
+        "#40e0ff",
+        "#80ff60",
+        "#ffffff"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 8,
+        "score": 8
+      }
+    },
+    {
+      "id": "20",
+      "title": "Draculas Disco",
+      "palette": [
+        "#ff2040",
+        "#9a30ff",
+        "#ffd0d0"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 9,
+        "score": 8.5
+      }
+    },
+    {
+      "id": "21",
+      "title": "Harvest Hoedown",
+      "palette": [
+        "#ffa040",
+        "#ff6a10",
+        "#ffe090"
+      ],
+      "hype": {
+        "busy": 5,
+        "jumpy": 5,
+        "score": 5
+      }
+    },
+    {
+      "id": "22",
+      "title": "Lyric Flight",
+      "palette": [
+        "#ff6a10",
+        "#ff3fa0",
+        "#8a2bff"
+      ],
+      "hideOverlays": [
+        "lyrics"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 8,
+        "score": 8
+      }
+    },
+    {
+      "id": "23",
+      "title": "Graveyard Glow-Up",
+      "palette": [
+        "#30ffd0",
+        "#9040ff",
+        "#70c8ff"
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 6,
+        "score": 6.5
+      }
+    },
+    {
+      "id": "24",
+      "title": "Black Cat Masquerade",
+      "palette": [
+        "#ffb030",
+        "#b040ff",
+        "#ff60b0"
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 6,
+        "score": 6.5
+      }
+    },
+    {
+      "id": "25",
+      "title": "Midnight Pumpkin Carnival",
+      "palette": [
+        "#ff7020",
+        "#ff30b0",
+        "#80ff40"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 7,
+        "score": 7.5
+      }
+    },
+    {
+      "id": "26",
+      "title": "Web of Bass",
+      "palette": [
+        "#9040ff",
+        "#ff4080",
+        "#60ffd0"
+      ],
+      "hype": {
+        "busy": 5,
+        "jumpy": 4,
+        "score": 4.5
+      }
+    },
+    {
+      "id": "27",
+      "title": "All Eyes on You",
+      "palette": [
+        "#40ffd0",
+        "#b060ff",
+        "#ffa040"
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 5,
+        "score": 6
+      }
+    },
+    {
+      "id": "28",
+      "title": "Trick or Treat Tornado",
+      "palette": [
+        "#ff8020",
+        "#c060ff",
+        "#60ff90"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 6,
+        "score": 7
+      }
+    },
+    {
+      "id": "29",
+      "title": "Dead Mans Dance",
+      "palette": [
+        "#8fc8c7",
+        "#276dbe",
+        "#90e7e6"
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 5,
+        "score": 6
+      }
+    },
+    {
+      "id": "30",
+      "title": "Phantom Frequencies",
+      "palette": [
+        "#d0a25e",
+        "#7644cc",
+        "#c44783"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 7,
+        "score": 7.5
+      }
+    },
+    {
+      "id": "31",
+      "title": "Close Encounters of the Pumpkin Kind",
+      "palette": [
+        "#7affbc",
+        "#5176b8",
+        "#ffa65a"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 7,
+        "score": 7.5
+      }
+    },
+    {
+      "id": "32",
+      "title": "Thirteen OClock",
+      "palette": [
+        "#dfa35a",
+        "#885291",
+        "#dbaa71"
+      ],
+      "hype": {
+        "busy": 6,
+        "jumpy": 6,
+        "score": 6
+      }
+    },
+    {
+      "id": "33",
+      "title": "The Last Ride",
+      "palette": [
+        "#f2ad61",
+        "#b94b93",
+        "#b9cfd1"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 6,
+        "score": 7
+      }
+    },
+    {
+      "id": "34",
+      "title": "Nocturne in the Crypt",
+      "palette": [
+        "#d56852",
+        "#7359ad",
+        "#8b2030"
+      ],
+      "hype": {
+        "busy": 6,
+        "jumpy": 5,
+        "score": 5.5
+      }
+    },
+    {
+      "id": "35",
+      "title": "The Clockwork Owl",
+      "palette": [
+        "#f2a849",
+        "#47b9ce",
+        "#a97737"
+      ],
+      "hype": {
+        "jumpy": 6,
+        "busy": 7,
+        "score": 6.5
+      }
+    },
+    {
+      "id": "36",
+      "title": "When the Bell Tolls",
+      "palette": [
+        "#f0a342",
+        "#678ecb",
+        "#9c6934"
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 6,
+        "score": 6.5
+      }
+    },
+    {
+      "id": "37",
+      "title": "The Night Bloom",
+      "palette": [
+        "#dd62ba",
+        "#70c99a",
+        "#f6aa43"
+      ],
+      "hype": {
+        "busy": 6,
+        "jumpy": 5,
+        "score": 5.5
+      }
+    },
+    {
+      "id": "38",
+      "title": "The Dollhouse",
+      "palette": [
+        "#c477aa",
+        "#76b8bb",
+        "#71344f"
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 6,
+        "score": 6.5
+      }
+    },
+    {
+      "id": "39",
+      "title": "Clown Midway",
+      "palette": [
+        "#f34b34",
+        "#4f9ed4",
+        "#f3b83f"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 7,
+        "score": 7.5
+      }
+    },
+    {
+      "id": "40",
+      "title": "Paper Moon Theater",
+      "palette": [
+        "#ffd778",
+        "#693b68",
+        "#28233b"
+      ],
+      "hype": {
+        "busy": 4,
+        "jumpy": 3,
+        "score": 3.5
+      }
+    },
+    {
+      "id": "41",
+      "title": "Hotel Nowhere",
+      "palette": [
+        "#e0a95d",
+        "#586fa5",
+        "#8e82ed"
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 6,
+        "score": 6.5
+      }
+    },
+    {
+      "id": "42",
+      "title": "Abyss Garden",
+      "palette": [
+        "#2abfbd",
+        "#5864c9",
+        "#e89de5"
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 4,
+        "score": 5.5
+      }
+    },
+    {
+      "id": "43",
+      "title": "Arena Pop",
+      "palette": [
+        "#ff2fa0",
+        "#8a50ff",
+        "#30d0ff"
+      ],
+      "hype": {
+        "busy": 9,
+        "jumpy": 9,
+        "score": 9
+      }
+    },
+    {
+      "id": "44",
+      "title": "Neon Drive",
+      "palette": [
+        "#ff3fa0",
+        "#b020ff",
+        "#ffd040"
+      ],
+      "hype": {
+        "busy": 5,
+        "jumpy": 4,
+        "score": 4.5
+      }
+    },
+    {
+      "id": "45",
+      "title": "Confetti Club",
+      "palette": [
+        "#30e0ff",
+        "#ff2fa0",
+        "#ffd040"
+      ],
+      "hype": {
+        "busy": 9,
+        "jumpy": 8,
+        "score": 8.5
+      }
+    },
+    {
+      "id": "46",
+      "title": "Garage Show",
+      "palette": [
+        "#ff2040",
+        "#30a0ff",
+        "#ffd040"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 8,
+        "score": 8
+      }
+    },
+    {
+      "id": "47",
+      "title": "Hyperdrive Rave",
+      "palette": [
+        "#ff2fa0",
+        "#30e0ff",
+        "#ffffff"
+      ],
+      "hype": {
+        "busy": 10,
+        "jumpy": 10,
+        "score": 10
+      }
+    },
+    {
+      "id": "48",
+      "title": "Whiteout Night",
+      "palette": [
+        "#041e42",
+        "#96bee6",
+        "#ffffff"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 8,
+        "score": 8
+      }
+    },
+    {
+      "id": "49",
+      "title": "Happy Valley Fireworks",
+      "palette": [
+        "#082a66",
+        "#96bee6",
+        "#ffffff"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 7,
+        "score": 7.5
+      }
+    },
+    {
+      "id": "50",
+      "title": "Vinyl Galaxy",
+      "palette": [
+        "#ff2fa0",
+        "#8a2bff",
+        "#30d0ff"
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 6,
+        "score": 6.5
+      }
+    },
+    {
+      "id": "51",
+      "title": "Screen Tunnel",
+      "palette": [
+        "#ff2fa0",
+        "#30d0ff",
+        "#ffd040"
+      ],
+      "hype": {
+        "busy": 9,
+        "jumpy": 8,
+        "score": 8.5
+      }
+    },
+    {
+      "id": "52",
+      "title": "Jellyfish Disco",
+      "palette": [
+        "#30e0d0",
+        "#ff3fa0",
+        "#b060ff"
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 5,
+        "score": 6
+      }
+    },
+    {
+      "id": "53",
+      "title": "Pinball Frenzy",
+      "palette": [
+        "#ff3fa0",
+        "#30d0ff",
+        "#ffd040"
+      ],
+      "hype": {
+        "busy": 9,
+        "jumpy": 8,
+        "score": 8.5
+      }
+    },
+    {
+      "id": "54",
+      "title": "Midnight Ferris Wheel",
+      "palette": [
+        "#ff8a20",
+        "#8a50ff",
+        "#ff3fa0"
+      ],
+      "hype": {
+        "busy": 7,
+        "jumpy": 5,
+        "score": 6
+      }
     }
   ],
   "homeassistant": {
@@ -120,7 +819,19 @@
           "entities": [
             "light.smart_rgbtw_bulb_3",
             "light.smart_rgbtw_bulb_4",
-            "light.smart_rgbtw_bulb_5"
+            "light.smart_rgbtw_bulb_5",
+            "light.drawer"
+          ]
+        },
+        {
+          "name": "bathroom",
+          "kind": "bulb",
+          "entities": [
+            "light.smart_rgbtw_bulb_6",
+            "light.smart_rgbtw_bulb_7",
+            "light.bathroom_light_1",
+            "light.bathroom_light_2",
+            "light.bathroom_light_3"
           ]
         }
       ],
@@ -145,6 +856,39 @@
           ]
         }
       ]
-    }
+    },
+    "presets": {
+      "01": "Toil and trouble",
+      "02": "Magneto",
+      "03": "Witching hour",
+      "04": "Pumpkin patch",
+      "05": "Vapor wave",
+      "06": "Trick or treat",
+      "07": "Stadium"
+    },
+    "dynamic": true,
+    "interval": 2,
+    "dynTransition": 1
+  },
+  "audioDevice": null,
+  "hud": {
+    "bubbles": [
+      "Welcome to Halloween @ the DawgHouse",
+      "Be kind to the DJ"
+    ],
+    "announcements": [
+      {
+        "title": "Jungle Juice",
+        "detail": "$3"
+      }
+    ],
+    "jam": {
+      "url": "",
+      "on": false,
+      "pin": false
+    },
+    "bubbleSeconds": 6,
+    "announceSeconds": 8,
+    "quietSeconds": 12
   }
 }

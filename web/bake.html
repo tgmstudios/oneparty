@@ -6,7 +6,7 @@
 // Frames are stepped at exactly 30fps wall-clock so MediaRecorder timestamps are right (an 8s loop takes ~8s).
 const q = new URLSearchParams(location.search), sceneId = q.get('scene');
 const W = +q.get('w') || 1920, H = +q.get('h') || 1080, FPS = 30, DUR = +q.get('dur') || 8;
-const done = m => parent.postMessage(m, '*');
+const done = m => { parent.postMessage(m, '*'); if (m.error) fetch('/api/report', { method: 'POST', body: JSON.stringify({ kind: 'bake', scene: sceneId, error: m.error }) }); };
 try {
   const lib = await import('/engine/lib.js');
   const S = await fetch('/api/state').then(r => r.json());
@@ -20,7 +20,7 @@ try {
   rec.start();
   const total = FPS * DUR, t0 = performance.now();
   for (let f = 0; f < total; f++) {
-    inst.update(f / total, f); stage.dither.uniforms.uF.value = f % 97; stage.composer.render(); track.requestFrame();
+    const phase=f/total; inst.update(phase, f); stage.dither.uniforms.uF.value = f % 97; stage.composer.render(); track.requestFrame();
     const wait = t0 + (f + 1) * 1000 / FPS - performance.now(); if (wait > 0) await new Promise(r => setTimeout(r, wait));
   }
   rec.stop(); await stopped;

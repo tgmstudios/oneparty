@@ -1,60 +1,429 @@
-<!doctype html><html><head><meta charset="utf-8"><title>oneparty control</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>oneparty control</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-:root{--bg:#0c0a10;--card:#171320;--line:#2a2338;--fg:#eee;--mut:#9a90b0;--acc:#ff6a10}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px system-ui,sans-serif;padding:16px}
-h1{font-size:18px;margin:0 0 12px}h2{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin:0 0 8px}
-.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
-button,select,input{font:inherit;color:var(--fg);background:#241d33;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
-button{cursor:pointer}button:hover{border-color:var(--acc)}button.on{background:var(--acc);color:#000;border-color:var(--acc);font-weight:700}
-.row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;align-items:center}
-.np{display:flex;gap:10px;align-items:center}.np img{width:56px;height:56px;border-radius:6px;background:#222}
-.sw{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:2px}
-.mut{color:var(--mut)}.big{font-size:18px;font-weight:700}#blk.on{background:#c00;border-color:#c00;color:#fff}
-.meter{height:8px;background:#241d33;border-radius:4px;overflow:hidden}.meter i{display:block;height:100%;background:var(--acc);width:0}
+:root{--acc:#ff6a10;--bg:#07060b;--panel:rgba(255,255,255,.045);--line:rgba(255,255,255,.09);--fg:#f4f2f8;--mut:#9b93ad;--ok:#37d67a;--bad:#ff5468;--r:18px}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--fg);font:14px/1.45 Inter,"Segoe UI Variable","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+body{padding:0 clamp(12px,2vw,28px) 40px}
+#bg{position:fixed;inset:-10%;z-index:-2;background:center/cover no-repeat;filter:blur(90px) saturate(1.5);opacity:.38;transition:background-image .8s,opacity .8s}
+body::before{content:"";position:fixed;inset:0;z-index:-1;background:radial-gradient(1200px 600px at 12% -10%,color-mix(in srgb,var(--acc) 22%,transparent),transparent 60%),radial-gradient(900px 500px at 100% 0,rgba(110,70,255,.14),transparent 60%),linear-gradient(transparent,rgba(7,6,11,.85) 70%)}
+button,select,input{font:inherit;color:var(--fg)}
+button{cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.06);border-radius:999px;padding:7px 14px;transition:background .15s,border-color .15s,transform .05s}
+button:hover{background:rgba(255,255,255,.11)}button:active{transform:scale(.97)}
+button.on{background:var(--acc);border-color:var(--acc);color:#120a04;font-weight:700}
+select,input[type=text],input:not([type]){background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:12px;padding:8px 12px;min-width:0}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+h2{margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);display:flex;align-items:center;gap:8px}
+h2 small{margin-left:auto;letter-spacing:0;text-transform:none;font-weight:500}
+.mut{color:var(--mut)}.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.grow{flex:1;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;backdrop-filter:blur(22px) saturate(1.3);-webkit-backdrop-filter:blur(22px) saturate(1.3);box-shadow:0 18px 50px rgba(0,0,0,.28)}
+.seg{display:inline-flex;background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;padding:5px 12px;font-size:13px}.seg button.on{background:var(--acc)}
+
+/* header */
+header{position:sticky;top:0;z-index:5;display:flex;gap:14px;align-items:center;padding:14px 0;margin-bottom:6px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);background:linear-gradient(rgba(7,6,11,.78),rgba(7,6,11,.4))}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand b{font-size:22px;letter-spacing:-.02em;font-weight:800;white-space:nowrap}
+.brand span{color:var(--mut);white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;background:#555;display:inline-block;box-shadow:0 0 0 0 transparent}
+.dot.ok{background:var(--ok);box-shadow:0 0 10px var(--ok)}.dot.bad{background:var(--bad);box-shadow:0 0 10px var(--bad)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-left:12px}
+.chip{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--mut);padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:rgba(0,0,0,.25);white-space:nowrap}
+.sp{flex:1}
+#blk{border-color:rgba(255,84,104,.5);color:#ffb3bd}#blk.on{background:var(--bad);border-color:var(--bad);color:#fff}
+
+/* layout */
+.cols{display:grid;gap:16px;grid-template-columns:minmax(300px,1fr) minmax(420px,1.7fr) minmax(300px,1fr);align-items:start}
+.col{display:grid;gap:16px}
+@media(max-width:1180px){.cols{grid-template-columns:1fr 1fr}.cols>.col:nth-child(2){order:-1;grid-column:1/-1}}
+@media(max-width:720px){.cols{grid-template-columns:1fr}.chips{display:none}}
+
+/* now playing */
+.hero{display:grid;gap:14px}
+#art{width:100%;aspect-ratio:1;object-fit:cover;border-radius:16px;background:#1a1722;box-shadow:0 24px 60px rgba(0,0,0,.5),0 0 60px color-mix(in srgb,var(--acc) 20%,transparent)}
+#ttl{font-size:22px;font-weight:800;letter-spacing:-.02em;line-height:1.2}
+.bar{height:6px;background:rgba(255,255,255,.14);border-radius:6px;cursor:pointer;position:relative}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),color-mix(in srgb,var(--acc) 60%,#fff));border-radius:6px;width:0;position:relative}
+.bar i::after{content:"";position:absolute;right:-6px;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px rgba(255,255,255,.12)}
+.times{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);font-variant-numeric:tabular-nums}
+.tr{display:flex;justify-content:center;align-items:center;gap:10px}
+.tr button{width:44px;height:44px;padding:0;display:grid;place-items:center;border-radius:50%}
+.tr button svg{width:20px;height:20px;fill:currentColor}
+.tr #pp{width:60px;height:60px;background:#fff;color:#111;border-color:#fff}.tr #pp svg{width:26px;height:26px}
+.tr button.on{background:rgba(255,255,255,.14);color:var(--acc);border-color:var(--acc)}
+input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:6px;background:rgba(255,255,255,.14);padding:0;border:0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#fff}
+.q{display:grid;gap:2px;max-height:240px;overflow:auto}.q div{display:flex;gap:10px;align-items:center;padding:6px;border-radius:10px}.q div:hover{background:rgba(255,255,255,.05)}
+.q img{width:36px;height:36px;border-radius:6px;object-fit:cover}.q b{font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.q .t{min-width:0}.q .n{width:16px;text-align:right;color:var(--mut);font-size:12px}
+
+/* visuals */
+.chan{display:grid;gap:14px}
+.chan-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chan-h b{font-size:17px;letter-spacing:-.01em}.role{font-size:11px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);color:var(--mut);text-transform:uppercase;letter-spacing:.08em}
+.tiles{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.tile{position:relative;height:92px;border-radius:14px;border:1px solid var(--line);padding:10px 12px;text-align:left;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;background:#15121d;isolation:isolate}
+.tile::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--g);opacity:.85;transition:opacity .2s,transform .3s}
+.tile::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(transparent 20%,rgba(5,4,10,.78))}
+.tile:hover::before{opacity:1;transform:scale(1.06)}
+.tile .id{position:absolute;top:8px;left:10px;font-size:11px;font-weight:800;opacity:.75;letter-spacing:.06em}
+.tile .nm{font-weight:700;font-size:13px;line-height:1.2;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+.tile .bk{position:absolute;top:8px;right:10px;font-size:10px;padding:1px 7px;border-radius:999px;background:rgba(0,0,0,.45);color:#cfe9ff}
+.tile.on{border-color:#fff;box-shadow:0 0 0 2px var(--acc),0 10px 36px color-mix(in srgb,var(--acc) 40%,transparent);transform:translateY(-1px)}
+.tile.on::after{background:linear-gradient(transparent 10%,rgba(5,4,10,.6))}
+.tile.on .id::after{content:" · ON AIR";color:var(--acc)}
+.opts{display:flex;gap:10px 18px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--mut)}
+.sw2{display:inline-flex;gap:8px;align-items:center;padding:4px 12px 4px 6px;border-radius:999px;font-size:13px}
+.sw2 i{width:30px;height:18px;border-radius:999px;background:rgba(255,255,255,.18);position:relative;transition:background .15s}
+.sw2 i::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s}
+.sw2.on{background:rgba(255,255,255,.07);color:var(--fg);font-weight:600}.sw2.on i{background:var(--acc)}.sw2.on i::after{transform:translateX(12px)}
+.err{color:#ff8e9b;font:12px ui-monospace,Consolas,monospace;white-space:pre-wrap}
+.gpu{font-size:11px}.gpu.sw{color:var(--bad)}
+
+/* lights + tempo */
+.bpm{display:flex;align-items:flex-end;gap:12px}
+#bpm{width:5.2ch;font-size:64px;font-weight:800;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;background:transparent;border:0;padding:0;outline:0}
+#bpm:focus{border-bottom:2px solid var(--acc)}
+.bpm .u{color:var(--mut);padding-bottom:8px;font-size:12px;letter-spacing:.1em}
+#beat{width:14px;height:14px;border-radius:50%;background:var(--acc);margin-bottom:12px;animation:pulse var(--per,.5s) ease-out infinite;box-shadow:0 0 18px var(--acc)}
+@keyframes pulse{0%{transform:scale(1.5);opacity:1}100%{transform:scale(.7);opacity:.35}}
+.meters{display:flex;gap:6px;align-items:flex-end;height:46px}
+.meters i{flex:1;background:linear-gradient(0deg,var(--acc),color-mix(in srgb,var(--acc) 50%,#fff));border-radius:5px;height:4%;transition:height .06s linear;opacity:.9}
+.meters.off i{opacity:.2}
+.lbl{display:flex;justify-content:space-between;font-size:10px;color:var(--mut);letter-spacing:.1em;margin-top:4px}
+#lyr{max-height:280px;overflow:auto;scroll-behavior:smooth;line-height:1.6;mask-image:linear-gradient(transparent,#000 18%,#000 82%,transparent);-webkit-mask-image:linear-gradient(transparent,#000 18%,#000 82%,transparent);padding:30px 0}
+#lyr div{color:var(--mut);opacity:.6;transition:all .3s}#lyr div.cur{color:var(--fg);opacity:1;font-size:17px;font-weight:700}
+textarea{width:100%;background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:12px;padding:8px 12px;color:var(--fg);font:inherit;resize:vertical}
+input[type=color]{width:42px;height:36px;padding:2px;border-radius:12px;background:rgba(0,0,0,.35);border:1px solid var(--line)}
+
+.ed-h{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}.ed-h b{font-size:13px}.ed-h span{font-size:11px}
+.ed-list{display:grid;gap:8px}
+.ann-row{display:grid;grid-template-columns:1fr 96px auto;gap:6px;padding:10px;border:1px solid var(--line);border-radius:14px;background:rgba(0,0,0,.22)}
+.ann-row .full{grid-column:1/-1}
+.bub-row{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}
+.ed-list input{width:100%}
+.ed-list textarea{width:100%;resize:none;overflow:hidden;min-height:38px;line-height:1.35;font:inherit;display:block}
+.ann-row [data-f=title]{font-weight:700;font-size:15px}
+.ann-row input[data-f=category]{text-transform:uppercase;letter-spacing:.08em;font-size:12px}
+.ann-row input[data-f=price]{text-align:center;font-weight:800;color:var(--acc)}
+.ctl{display:inline-flex;gap:4px;align-items:center}.ctl button{padding:5px 9px;line-height:1}.ctl .del:hover{background:var(--bad);border-color:var(--bad)}
+.ed-add{margin-top:8px;border-style:dashed;color:var(--mut);width:100%;border-radius:12px}.ed-add:hover{color:var(--fg);border-color:var(--acc)}
+.ed-time{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.ed-time label{display:grid;gap:4px;font-size:11px;color:var(--mut)}.ed-time input{width:100%}
+
+.dl-opts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}.dl-opts label{display:grid;gap:4px;font-size:11px;color:var(--mut)}.dl-opts select,.dl-opts input{width:100%}
+.dl-list{display:grid;gap:6px}
+.dl-job{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.2)}
+.dl-job .t{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dl-job .m{font-size:11px;color:var(--mut)}
+.dl-job .b{grid-column:1/-1;height:4px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}.dl-job .b i{display:block;height:100%;background:var(--acc);width:0;transition:width .25s}
+.dl-job.done .m{color:var(--ok)}.dl-job.error .m{color:#ff8e9b}.dl-job.canceled{opacity:.5}
+.dl-job button{padding:3px 9px}
+
+.yt-auth{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(0,0,0,.2);margin-bottom:10px}
+.yt-auth.ok{border-color:rgba(55,214,122,.5)}.yt-auth.wait{border-color:var(--acc)}
+
+.clips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{padding:5px 11px;font-size:12px;border-radius:999px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style></head><body>
-<h1 id="title">oneparty</h1>
-<div class="grid">
-  <div class="card"><h2>Now playing</h2><div class="np"><img id="art"><div><div class="big" id="ttl">Nothing playing</div><div class="mut" id="art-name"></div></div></div>
-    <div class="row" style="margin-top:10px"><a id="sp" href="/auth/spotify/login" target="_blank" style="color:var(--acc)">Connect Spotify</a><span class="mut" id="sp-st"></span></div>
-    <div class="meter"><i id="lvl"></i></div></div>
-  <div class="card"><h2>Tempo</h2><div class="row"><button id="tap">Tap tempo</button><input id="bpm" type="number" min="60" max="200" style="width:80px"><span class="mut">BPM (one loop = 16 beats)</span></div>
-    <div class="row"><button id="blk">Blackout</button><button id="launch">Launch displays</button></div></div>
-  <div class="card"><h2>Lighting (Home Assistant)</h2><div class="mut" id="ha-st"></div>
-    <div class="row" id="lmode"></div>
-    <div class="row"><input id="lcol" type="color" value="#ff6a10"><button id="lset">Set colour</button><button id="lflash">Flash</button></div></div>
-  <div class="card"><h2>Clips</h2><div class="row"><input id="yt" placeholder="YouTube / video URL" style="flex:1;min-width:0"><button id="ytgo">Download</button></div><div class="mut" id="yt-st">Saved to media/&lt;event&gt;/ and picked up by video channels.</div></div>
-  <div class="card"><h2>Cache</h2><div class="mut" id="cache-st">…</div>
-    <div class="row"><button id="bake">Bake all scenes (background)</button></div><iframe id="baker" style="display:none"></iframe></div>
+<div id="bg"></div>
+<header>
+  <div class="brand"><b id="title">oneparty</b><span id="sub"></span></div>
+  <div class="chips">
+    <span class="chip"><span class="dot" id="d-sp"></span><span id="sp-st">Spotify</span></span>
+    <span class="chip"><span class="dot" id="d-ha"></span><span id="ha-st">Lights</span></span>
+    <span class="chip"><span class="dot" id="d-au"></span><span id="aud-src">Audio</span></span>
+    <span class="chip" id="gpu-chip" hidden></span>
+  </div>
+  <span class="sp"></span>
+  <button id="launch" title="Open any display windows that aren't open (existing ones are reused)">Open displays</button>
+  <button id="wht">Whiteout</button>
+  <button id="blk">Blackout</button>
+</header>
+
+<div class="cols">
+  <div class="col">
+    <section class="card hero">
+      <img id="art" alt="">
+      <div><div id="ttl">Nothing playing</div><div class="mut" id="art-name"></div><div class="mut" id="dev" style="font-size:12px"></div></div>
+      <div><div class="bar" id="bar"><i id="barfill"></i></div><div class="times"><span id="pos">0:00</span><span id="dur">0:00</span></div></div>
+      <div class="tr">
+        <button id="shuf" title="Shuffle"><svg viewBox="0 0 24 24"><path d="M17 3h4v4l-1.5-1.5-4 4-1.4-1.4 4-4zM3 6h3c2 0 3.2.8 4.3 2.4l5.4 7.6c.7 1 1.5 1.5 2.8 1.5H17l-1.5-1.5 1.4-1.4L21 17.2 16.9 21.3l-1.4-1.4 1.5-1.5h-1.8c-2 0-3.2-.8-4.3-2.4L5.5 8.4C4.8 7.4 4 7 3 7zm0 11h3c1 0 1.7-.4 2.4-1.2l1.1 1.6C8.7 18.7 7.6 19 6 19H3zm13-8.5L18 12l-1.4 1.4-1-1.4z"/></svg></button>
+        <button id="prev"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zm3.5 7L19 5v14z"/></svg></button>
+        <button id="pp"><svg viewBox="0 0 24 24"><path id="pp-i" d="M8 5v14l11-7z"/></svg></button>
+        <button id="next"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM5 5l9.5 7L5 19z"/></svg></button>
+        <button id="rep" title="Repeat"><svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2z"/></svg></button>
+      </div>
+      <div class="row"><span class="mut">🔈</span><input id="vol" type="range" min="0" max="100" class="grow"><span class="mut" id="volv" style="width:3.5ch;text-align:right"></span></div>
+      <div class="row" style="font-size:12px"><a id="sp" href="/auth/spotify/login" target="_blank">Connect Spotify</a><a id="sp-re" href="/auth/spotify/login" target="_blank" hidden>Reconnect Spotify for playback control</a><span id="p-err" class="err"></span></div>
+    </section>
+    <section class="card"><h2>Up next</h2><div class="q" id="queue"><span class="mut">Nothing queued</span></div></section>
+  </div>
+
+  <div class="col">
+    <div id="channels" class="col"></div>
+    <section class="card"><h2>Lyrics</h2><div id="lyr"><span class="mut">No lyrics</span></div></section>
+  </div>
+
+  <div class="col">
+    <section class="card">
+      <h2>Tempo <small id="bpm-src"></small></h2>
+      <div class="bpm"><input id="bpm" type="number" min="40" max="220" step="0.1" aria-label="BPM"><span class="u">BPM</span><span id="beat"></span></div>
+      <div class="row" style="margin-top:14px"><button id="bpmauto">Follow song</button><button id="tap">Tap tempo</button></div>
+      <div class="row" style="margin-top:16px"><span class="mut" style="font-size:12px">Audio from</span><select id="aout" class="grow" title="Windows output device that is looped back for beats and tempo"></select></div>
+      <div style="margin-top:12px"><div class="meters off" id="meters"><i id="m-bass"></i><i id="m-mid"></i><i id="m-high"></i></div><div class="lbl"><span>BASS</span><span>MID</span><span>HIGH</span></div></div>
+    </section>
+
+    <section class="card" id="auto-card">
+      <h2>Auto scenes <small id="auto-st"></small></h2>
+      <div class="row"><button class="sw2" id="auto"><i></i>On</button><button class="sw2" id="auto-song" title="Cut when the song changes"><i></i>New song</button><button class="sw2" id="auto-drop" title="Cut when the music drops back in after a quiet bit"><i></i>Drops</button><button class="sw2" id="auto-shuf" title="Random order (off = in order)"><i></i>Shuffle</button></div>
+      <div class="opts" style="margin-top:12px"><label>Every <input id="auto-bars" type="number" min="1" max="64" step="1" style="width:64px"> bars</label><label title="How easily a drop triggers a cut">Drop sensitivity <input id="auto-sens" type="range" min="1" max="10" step="1" style="width:90px;vertical-align:middle"></label><label>Min <input id="auto-min" type="number" min="2" max="300" step="1" style="width:64px"> sec</label><span class="seg" id="auto-mode"><button data-m="live">Live</button><button data-m="cached">Baked</button></span></div>
+      <div class="mut" style="font-size:12px;margin:12px 0 6px">Scenes to rotate through <a href="#" id="auto-all" style="margin-left:8px">all</a></div>
+      <div class="chips" id="auto-pool" style="margin-left:0"></div>
+    </section>
+
+
+    <section class="card">
+      <h2>Lights <small class="mut" id="l-last"></small></h2>
+      <div class="row" style="margin-bottom:12px"><span class="seg" id="lmode"></span><button id="ldyn" title="Re-shuffle the preset colors every few seconds">Loop</button></div>
+      <div class="row"><select id="lpre" class="grow"></select><button id="lapply">Apply</button></div>
+      <div class="row" style="margin-top:12px"><input id="lcol" type="color" value="#ff6a10"><button id="lset">Set color</button><button id="lflash">Flash</button></div>
+    </section>
+
+    <section class="card" id="stage-card">
+      <h2>Stage text <small class="mut" id="hud-st"></small></h2>
+
+      <div class="ed-h"><b>Announcements</b><span class="mut">bottom-right rotation</span></div>
+      <div id="ann-list" class="ed-list"></div>
+      <button id="ann-add" class="ed-add">+ Add announcement</button>
+
+      <div class="ed-h" style="margin-top:20px"><b>Bubbles</b><span class="mut">short messages</span></div>
+      <div id="bub-list" class="ed-list"></div>
+      <button id="bub-add" class="ed-add">+ Add bubble</button>
+
+      <div class="ed-h" style="margin-top:20px"><b>Spotify Jam</b><span class="mut">QR on the left</span></div>
+      <div class="row"><input id="h-jam" placeholder="Paste the Jam link from the Spotify app" class="grow"><img id="h-qr" alt="" hidden style="width:72px;height:72px;border-radius:8px;background:#fff;image-rendering:pixelated"></div>
+      <div class="row" style="margin-top:8px"><button class="sw2" id="h-jamon"><i></i>Show QR</button><button class="sw2" id="h-jampin"><i></i>Pin</button></div>
+
+      <div class="ed-h" style="margin-top:20px"><b>Timing</b><span class="mut">seconds</span></div>
+      <div class="ed-time">
+        <label title="Nothing on screen between bubbles/announcements (0 = always something)">Quiet gap<input id="h-quiet" type="number" min="0" max="120"></label>
+        <label>Bubble hold<input id="h-bsec" type="number" min="3" max="30"></label>
+        <label>Announcement hold<input id="h-asec" type="number" min="3" max="60"></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Saved settings</h2>
+      <div class="mut" style="font-size:12px" id="set-st"></div>
+      <div class="row" style="margin-top:10px"><button id="set-reset">Reset to event defaults</button></div>
+    </section>
+
+    <section class="card">
+      <h2>Clips &amp; cache</h2>
+      <div class="yt-auth" id="yt-auth">
+        <div><b id="yt-auth-t">YouTube sign-in</b><div class="mut" id="yt-auth-m" style="font-size:12px"></div></div>
+        <span class="row"><button id="yt-signin">Sign in</button><button id="yt-forget" title="Delete the saved cookies">Sign out</button></span>
+      </div>
+      <textarea id="dl-urls" rows="3" spellcheck="false" placeholder="One link per line (videos or playlists).&#10;Snippet for one link:  https://youtu.be/xxxx @ 1:20-2:10"></textarea>
+      <div class="dl-opts">
+        <label>Playlists<select id="dl-pl"><option value="single">Just that video</option><option value="all">Whole playlist</option><option value="first">First N videos</option></select></label>
+        <label id="dl-n-wrap" hidden>How many<input id="dl-n" type="number" min="1" max="200" value="5"></label>
+        <label>Quality<select id="dl-q"><option value="720">720p</option><option value="1080" selected>1080p</option><option value="1440">1440p</option><option value="2160">4K</option></select></label>
+        <label title="Applies to every link without its own @ range. Leave blank for the full video.">Snippet start<input id="dl-start" placeholder="0:00"></label>
+        <label>Snippet end<input id="dl-end" placeholder="end"></label>
+        <label title="YouTube often demands a sign-in. Auto uses cookies.txt from the project folder if present.">Cookies from<select id="dl-ck"><option value="auto">Auto (cookies.txt if present)</option><option value="none">None</option><option value="file">cookies.txt file</option><option value="firefox">Firefox</option><option value="brave">Brave (close it first)</option><option value="edge">Edge (close it first)</option><option value="chrome">Chrome (close it first)</option></select></label>
+      </div>
+      <div class="row" style="margin:10px 0 6px"><button id="dl-add" class="on">Add to queue</button><button id="dl-clear">Clear finished</button><span class="mut" id="dl-st" style="font-size:12px"></span></div>
+      <div id="dl-list" class="dl-list"></div>
+      <div class="mut" style="font-size:12px;margin:8px 0 14px">Saved to media/&lt;event&gt;/ and picked up by the video channels.</div>
+      <div class="row"><button id="bake">Bake missing scenes</button><span class="mut" id="cache-st" style="font-size:12px">…</span></div>
+      <iframe id="baker" style="display:none"></iframe>
+    </section>
+  </div>
 </div>
-<div id="channels" class="grid" style="margin-top:12px"></div>
+
+<script src="/vendor/qrcode.js"></script>
 <script type="module">
 import { connect, cmd, trackPosMs } from '/js/bus.js';
-const $ = s => document.querySelector(s); let S = null, cached = [];
-const refreshCache = () => fetch('/api/cache').then(r => r.json()).then(c => { cached = c; $('#cache-st').textContent = c.length ? `${c.length} baked: ${c.map(f => f.replace('.webm', '')).join(', ')}` : 'nothing baked yet'; if (S) render(); });
+const $ = s => document.querySelector(s);
+const esc = x => String(x ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const shortName = f => f.replace(/\.[a-z0-9]+$/i, '').replace(/^.* - (\d+ - )/, '$1').replace(/\s+[｜|].*$/, '').replace(/\s{2,}/g, ' ').slice(0, 34);
+const fmt = ms => { const s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+let S = null, cached = [], media = [], T = null, L = null, curLine = -2, lyrEls = [], lastAudioAt = 0;
+
+const refreshCache = () => Promise.all([fetch('/api/cache').then(r => r.json()), fetch('/api/media').then(r => r.json())]).then(([c, m]) => { cached = c; media = m; $('#cache-st').textContent = c.length ? `${c.length} baked` : 'nothing baked yet'; if (S) render(); });
+
 function render() {
-  $('#title').textContent = `${S.event.title} — ${S.event.subtitle || ''}`;
-  $('#bpm').value = Math.round(S.bpm); $('#blk').classList.toggle('on', S.blackout);
-  $('#sp').style.display = S.spotify.authed ? 'none' : ''; $('#sp-st').textContent = S.spotify.enabled ? (S.spotify.authed ? 'Spotify connected' : '') : 'set SPOTIFY_CLIENT_ID in .env';
-  $('#ha-st').textContent = S.ha.enabled ? `${S.ha.groups.map(g => `${g.name} (${g.kind}, ${g.n})`).join(' · ') || 'no lights configured'}` : 'Not configured (HA_URL / HA_TOKEN in .env)';
+  document.documentElement.style.setProperty('--acc', S.event.theme?.accent || '#ff6a10');
+  $('#title').textContent = S.event.title; $('#sub').textContent = S.event.subtitle || ''; document.title = `${S.event.title} · control`;
+  $('#wht').classList.toggle('on', S.whiteout); $('#wht').textContent = S.whiteout ? 'Whiteout ON' : 'Whiteout'; $('#blk').classList.toggle('on', S.blackout); $('#blk').textContent = S.blackout ? 'Blackout ON' : 'Blackout';
+
+  // status chips
+  const sp = S.spotify;
+  $('#d-sp').className = 'dot ' + (sp.authed ? 'ok' : 'bad'); $('#sp-st').textContent = !sp.enabled ? 'Spotify: no client id' : sp.authed ? 'Spotify' : 'Spotify: not connected';
+  $('#sp').style.display = sp.authed ? 'none' : '';
+  $('#sp-re').hidden = !(sp.authed && sp.canControl === false) && !/fresh login/.test($('#p-err').textContent);
+  $('#d-ha').className = 'dot ' + (S.ha.enabled && S.ha.lights.length ? (S.lights.last && !S.lights.last.ok ? 'bad' : 'ok') : 'bad');
+  $('#ha-st').textContent = S.ha.enabled ? `${S.ha.lights.length} lights · ${S.ha.groups.map(g => g.name).join(', ')}` : 'Lights: not configured';
+  const gp = Object.values(S.gpu || {})[0]; $('#gpu-chip').hidden = !gp;
+  if (gp) { const nm = (gp.renderer.match(/(NVIDIA|AMD|Intel)[^,(]*?(RTX|GTX|Radeon|Iris|UHD|Arc)[^,(]*/i) || [gp.renderer])[0].replace(/\(.*/, '').trim(); $('#gpu-chip').innerHTML = `<span class="dot ${gp.software ? 'bad' : 'ok'}"></span>${esc(gp.software ? 'SOFTWARE RENDERING' : nm)}`; }
+
+  // tempo
+  if (document.activeElement !== $('#bpm')) $('#bpm').value = S.bpmAuto ? (+S.bpm).toFixed(1) : Math.round(S.bpm);
+  $('#beat').style.setProperty('--per', (60 / Math.max(40, S.bpm)).toFixed(3) + 's');
+  $('#bpmauto').classList.toggle('on', S.bpmAuto);
+  if (S.auto) {
+    const A = S.auto; $('#auto').classList.toggle('on', A.on); $('#auto-song').classList.toggle('on', A.onSong); $('#auto-drop').classList.toggle('on', A.onDrop); $('#auto-shuf').classList.toggle('on', A.shuffle);
+    for (const [id, v] of [['auto-bars', A.bars], ['auto-min', A.minSec], ['auto-sens', A.sens]]) if (document.activeElement !== $('#' + id)) $('#' + id).value = v;
+    $('#auto-mode').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.m === A.mode));
+    $('#auto-st').textContent = !A.on ? 'off' : A.last ? `last: ${A.last.scene} (${A.last.why})` : 'listening for the beat';
+    const pool = A.pool || S.scenes.map(x => x.id);
+    $('#auto-pool').innerHTML = S.scenes.map(x => `<button class="chip ${pool.includes(x.id) ? 'on' : ''}" data-id="${x.id}" style="${pool.includes(x.id) ? 'border-color:var(--acc);color:var(--fg)' : 'opacity:.5'}">${x.id} ${x.title}${S.sceneStatus?.[x.id]?.ok === false ? ' ⚠' : ''}</button>`).join('');
+  }
+  const I = S.bpmInfo; $('#bpm-src').textContent = !I ? '' : I.source === 'manual' ? 'manual' : I.source === 'audio' ? 'listening' + (I.raw ? ` · heard ${I.raw}` : '…') : I.raw ? `${I.source.replace('deezer-', 'Deezer ')}${I.raw !== I.bpm ? ` · ${I.raw} → ${I.bpm}` : ''}` : I.source;
+
+  $('#set-st').textContent = S.settings ? `Every change here is saved live to ${S.settings.file}${S.settings.savedAt ? ' (last saved ' + new Date(S.settings.savedAt).toLocaleTimeString() + ')' : ' (nothing saved yet)'} and restored on restart. Delete that file, or reset, to clear it.` : '';
+  // stage text editor (don't clobber what's being typed)
+  loadEditor(); drawDownloads(); drawYtAuth();
+  if (S.hud) {
+    if (document.activeElement !== $('#h-jam')) $('#h-jam').value = S.hud.jam.url || '';
+    for (const [id, k, d] of [['#h-quiet', 'quietSeconds', 12], ['#h-bsec', 'bubbleSeconds', 6], ['#h-asec', 'announceSeconds', 8]]) if (document.activeElement !== $(id)) $(id).value = S.hud[k] ?? d;
+  }
+  { const u = S.hud?.jam?.url, el = $('#h-qr');
+    if (u && window.qrcode) { try { const q = window.qrcode(0, 'M'); q.addData(u); q.make(); el.src = q.createDataURL(4, 2); el.hidden = false; } catch { el.hidden = true; } } else el.hidden = true; }
+  $('#h-jamon').classList.toggle('on', !!S.hud?.jam?.on); $('#h-jampin').classList.toggle('on', !!S.hud?.jam?.pin);
+  // audio output device (backend loopback)
+  $('#aout').innerHTML = '<option value="">Windows default output</option>' + (S.audioDevices || []).map(d => `<option value="${esc(d.name)}"${S.audioDevice && d.name.toLowerCase().includes(S.audioDevice.toLowerCase()) ? ' selected' : ''}>${esc(d.name)}${d.default ? ' (default)' : ''}</option>`).join('');
+  if (!S.audioDevice) $('#aout').value = '';
+  // lights
+  const cats = [...new Set(S.presets.map(p => p.category))];
+  $('#lpre').innerHTML = '<option value="">Per-scene preset (from event)</option>' + cats.map(c => `<optgroup label="${c}">${S.presets.filter(p => p.category === c).map(p => `<option value="${p.id}"${S.lights.preset === p.id ? ' selected' : ''}>${p.name}</option>`).join('')}</optgroup>`).join('');
+  $('#ldyn').classList.toggle('on', !!S.lights.dynamic);
+  const Ls = S.lights.last; $('#l-last').textContent = Ls ? `${Ls.preset || Ls.what}: ${Ls.ok ? 'sent' : 'FAILED ' + (Ls.error || '')}` : '';
   $('#lmode').innerHTML = ['sync', 'manual', 'off'].map(m => `<button data-m="${m}" class="${S.lights.mode === m ? 'on' : ''}">${m}</button>`).join('');
-  $('#channels').innerHTML = Object.entries(S.channels).filter(([, c]) => c.role !== 'control').map(([id, c]) => `
-    <div class="card"><h2>${id} · ${c.role}</h2>
-      <div class="row">${['live', 'cached', 'video'].map(m => `<button data-ch="${id}" data-mode="${m}" class="${c.mode === m ? 'on' : ''}">${m}</button>`).join('')}</div>
-      <div class="row">${S.scenes.map(s => `<button data-ch="${id}" data-scene="${s.id}" class="${c.scene === s.id ? 'on' : ''}">${(s.palette || []).slice(0, 3).map(p => `<span class="sw" style="background:${p}"></span>`).join('')}${s.title}${cached.includes(s.id + '.webm') ? ' ●' : ''}</button>`).join('')}</div>
-    </div>`).join('');
+
+  // channels
+  $('#channels').innerHTML = Object.entries(S.channels).filter(([, c]) => c.role !== 'control').map(([id, c]) => {
+    const gpu = S.gpu?.[id], st = S.sceneStatus?.[c.scene];
+    const sw = (on, attr, label, tip = '') => `<button class="sw2 ${on ? 'on' : ''}" data-ch="${id}" ${attr} title="${tip}"><i></i>${label}</button>`;
+    const segs = (key, vals, cur, unit = '') => `<span class="seg">${vals.map(v => `<button data-ch="${id}" data-q="${key}" data-v="${v}" class="${cur == v ? 'on' : ''}">${v}${unit}</button>`).join('')}</span>`;
+    return `<section class="card chan">
+      <div class="chan-h"><b>${esc(id)}</b><span class="role">${esc(c.role)}</span><span class="grow"></span>
+        ${c.mode === 'video'
+          ? `<span class="seg"><button class="on" data-ch="${id}" data-mode="video">video</button></span><button class="chip" data-ch="${id}" data-mode="live" title="Back to the live scenes">← Scenes</button>`
+          : `<span class="seg">${['live', 'cached', 'video'].map(m => `<button data-ch="${id}" data-mode="${m}" class="${c.mode === m ? 'on' : ''}">${m}</button>`).join('')}</span>`}</div>
+      ${c.mode === 'video' ? '' : `<div class="tiles">${S.scenes.map(s => { const p = s.palette?.length ? s.palette : ['#444', '#222'];
+        return `<button class="tile ${c.scene === s.id ? 'on' : ''}" data-ch="${id}" data-scene="${s.id}" style="--g:linear-gradient(135deg,${p[0]},${p[1] || p[0]} 55%,${p[2] || p[1] || p[0]})">
+          <span class="id">${esc(s.id)}</span>${cached.includes(s.id + '.webm') ? '<span class="bk">baked</span>' : ''}<span class="nm">${esc(s.title)}</span></button>`; }).join('')}</div>`}
+      ${c.mode === 'video' ? `<div class="clips"><span class="mut" style="font-size:12px">Clip</span>
+        <button class="chip ${!c.params.clip && c.mode === 'video' ? 'on' : ''}" data-ch="${id}" data-clip="">All, in order</button>
+        ${media.map(f => `<button class="chip ${c.params.clip === f && c.mode === 'video' ? 'on' : ''}" data-ch="${id}" data-clip="${esc(f)}" title="${esc(f)}">${esc(shortName(f))}</button>`).join('')}
+        ${media.length ? '' : '<span class="mut" style="font-size:12px">no finished downloads yet - baked scenes play instead</span>'}</div>` : ''}
+      ${st?.ok === false ? `<div class="err">${esc(st.error)}</div>` : ''}
+      <div class="opts">
+        ${[['nowplaying', 'Now playing'], ['lyrics', 'Lyrics'], ['bubbles', 'Bubbles'], ['announcements', 'Announcements'], ['motion', 'Motion']].map(([k, l]) => sw(c.overlays.includes(k), `data-ov="${k}"`, l)).join('')}
+        ${c.mode === 'video' ? '' : sw((S.scenes.find(x => x.id === c.scene)?.hideOverlays || []).includes('lyrics'), `data-hide="lyrics" data-scene-id="${c.scene}"`, 'Hide lyrics block on this scene', 'For scenes that show the lyrics themselves: hides the lyrics block while this scene is up (saved per scene)')}
+        <span class="grow"></span>
+        <span class="seg" title="How much the picture flashes and zooms with the music">${[['Steady', 0], ['Subtle', 0.35], ['Full', 1]].map(([l, v]) => `<button data-ch="${id}" data-q="react" data-v="${v}" class="${(c.params.react ?? 1) == v ? 'on' : ''}">${l}</button>`).join('')}</span>
+        ${c.mode === 'video' ? '' : `<span class="mut" style="font-size:12px" title="Speed of the background motion">Speed</span>` + segs('speed', [0.25, 0.5, 1, 2, 3], c.params.speed ?? 1, '×') + segs('maxH', [540, 720, 1080, 1440], c.params.maxH ?? (S.kiosk ? 1440 : 720), 'p') + segs('fps', [24, 30, 60], c.params.fps ?? (S.kiosk ? 60 : 30))}
+      </div>
+      ${gpu ? `<div class="gpu mut ${gpu.software ? 'sw' : ''}">GPU · ${esc(gpu.renderer)}</div>` : ''}
+    </section>`;
+  }).join('');
 }
+
 document.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.scene) cmd({ type: 'scene', channel: b.dataset.ch, scene: b.dataset.scene, mode: S.channels[b.dataset.ch].mode === 'video' ? 'live' : undefined });
+  else if (b.dataset.hide) { const sc = S.scenes.find(x => x.id === b.dataset.sceneId), cur = sc?.hideOverlays || [], k = b.dataset.hide; cmd({ type: 'sceneOpts', scene: b.dataset.sceneId, hideOverlays: cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k] }); }
+  else if (b.dataset.ov) cmd({ type: 'overlay', channel: b.dataset.ch, name: b.dataset.ov, on: !S.channels[b.dataset.ch].overlays.includes(b.dataset.ov) });
+  else if (b.dataset.aud) cmd({ type: 'channelAudio', channel: b.dataset.ch, on: !S.channels[b.dataset.ch].audio });
+  else if (b.dataset.clip !== undefined) cmd({ type: 'param', channel: b.dataset.ch, key: 'clip', value: b.dataset.clip }).then(() => cmd({ type: 'mode', channel: b.dataset.ch, mode: 'video' }));
+  else if (b.dataset.q) cmd({ type: 'param', channel: b.dataset.ch, key: b.dataset.q, value: +b.dataset.v });
   else if (b.dataset.mode) cmd({ type: 'mode', channel: b.dataset.ch, mode: b.dataset.mode });
   else if (b.dataset.m) cmd({ type: 'lights', mode: b.dataset.m });
 });
+$('#wht').onclick = () => cmd({ type: 'whiteout', on: !S.whiteout });
 $('#blk').onclick = () => cmd({ type: 'blackout', on: !S.blackout });
 $('#launch').onclick = () => fetch('/api/launch', { method: 'POST' });
-$('#ytgo').onclick = () => { fetch('/api/fetch', { method: 'POST', body: JSON.stringify({ url: $('#yt').value }) }).then(r => r.json()).then(r => r.error && ($('#yt-st').textContent = r.error)); };
+// ---- stage text editor: structured rows, auto-saved ----
+let ed = null, edTouched = 0, saveT = null;
+const shortPrice = d => !!d && d.length <= 9;
+function loadEditor(force) {
+  if (!S?.hud) return;
+  const el = document.activeElement, typing = el && el.closest && el.closest('#stage-card') && el.tagName !== 'BUTTON';
+  if (!force && ed && (typing || Date.now() - edTouched < 6000)) return;
+  ed = {
+    bubbles: S.hud.bubbles.slice(),
+    announcements: S.hud.announcements.map(a => {
+      const n = { category: a.category || '', title: a.title || '', price: a.price || '', detail: a.detail || '' };
+      if (!n.price && shortPrice(n.detail)) { n.price = n.detail; n.detail = ''; }   // older "Title | $3" entries
+      return n;
+    }),
+  };
+  drawEditor();
+}
+const ctl = `<span class="ctl"><button data-act="up" title="Move up">↑</button><button data-act="down" title="Move down">↓</button><button data-act="del" class="del" title="Remove">✕</button></span>`;
+const autosize = el => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
+function drawEditor() {
+  $('#ann-list').innerHTML = ed.announcements.map((a, i) => `<div class="ann-row" data-i="${i}">
+      <input data-f="category" placeholder="Category (SPECIAL)" value="${esc(a.category)}">
+      <input data-f="price" placeholder="Price" value="${esc(a.price)}">
+      ${ctl}
+      <textarea class="full" data-f="title" rows="1" placeholder="Title, e.g. Jungle Juice">${esc(a.title)}</textarea>
+      <textarea class="full" data-f="detail" rows="1" placeholder="Description (optional) - Enter adds a line">${esc(a.detail)}</textarea>
+    </div>`).join('') || '<div class="mut" style="font-size:12px">No announcements yet.</div>';
+  queueMicrotask(() => document.querySelectorAll('#stage-card textarea').forEach(autosize));
+  $('#bub-list').innerHTML = ed.bubbles.map((t, i) => `<div class="bub-row" data-i="${i}"><textarea data-f="text" rows="1" placeholder="Message - Enter adds a line">${esc(t)}</textarea>${ctl}</div>`).join('') || '<div class="mut" style="font-size:12px">No bubbles yet.</div>';
+}
+function saveHud(extra = {}) {
+  clearTimeout(saveT);
+  const num = id => ($(id).value === '' ? undefined : +$(id).value);
+  return cmd({
+    type: 'hud', bubbles: ed.bubbles.filter(t => t.trim()), announcements: ed.announcements.filter(a => a.title.trim()),
+    quietSeconds: num('#h-quiet'), bubbleSeconds: num('#h-bsec'), announceSeconds: num('#h-asec'),
+    jam: { url: $('#h-jam').value, ...extra },
+  }).then(() => { edTouched = Date.now(); $('#hud-st').textContent = 'saved ✓'; setTimeout(() => { $('#hud-st').textContent = ''; }, 1500); });
+}
+function queueSave() { edTouched = Date.now(); $('#hud-st').textContent = 'editing…'; clearTimeout(saveT); saveT = setTimeout(() => saveHud(), 600); }
+$('#stage-card').addEventListener('input', e => {
+  const f = e.target.dataset && e.target.dataset.f, row = e.target.closest('[data-i]'); if (!f || !row) return;
+  const i = +row.dataset.i;
+  if (e.target.tagName === 'TEXTAREA') autosize(e.target);
+  if (row.classList.contains('ann-row')) ed.announcements[i][f] = e.target.value; else ed.bubbles[i] = e.target.value;
+  queueSave();
+});
+$('#stage-card').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const row = b.closest('[data-i]'), i = +row.dataset.i, list = row.classList.contains('ann-row') ? ed.announcements : ed.bubbles, act = b.dataset.act;
+  if (act === 'del') list.splice(i, 1);
+  else if (act === 'up' && i > 0) [list[i - 1], list[i]] = [list[i], list[i - 1]];
+  else if (act === 'down' && i < list.length - 1) [list[i + 1], list[i]] = [list[i], list[i + 1]];
+  drawEditor(); queueSave();
+});
+$('#ann-add').onclick = () => { ed.announcements.push({ category: '', title: '', price: '', detail: '' }); edTouched = Date.now(); drawEditor(); $('#ann-list').querySelector('.ann-row:last-child [data-f=title]')?.focus(); };
+$('#bub-add').onclick = () => { ed.bubbles.push(''); edTouched = Date.now(); drawEditor(); $('#bub-list').querySelector('.bub-row:last-child input')?.focus(); };
+for (const id of ['#h-jam', '#h-quiet', '#h-bsec', '#h-asec']) $(id).addEventListener('change', () => saveHud());
+$('#h-jamon').onclick = () => saveHud({ on: !S.hud.jam.on });
+$('#h-jampin').onclick = () => saveHud({ pin: !S.hud.jam.pin });
+$('#set-reset').onclick = () => { if (confirm('Forget all live tweaks (scenes, overlays, quality, lights preset, BPM mode, stage text, audio device) and go back to the event defaults?')) cmd({ type: 'settingsReset' }); };
+$('#aout').onchange = e => cmd({ type: 'audioDevice', device: e.target.value || null });
+$('#bpmauto').onclick = () => cmd({ type: 'bpmAuto', on: !S.bpmAuto });
+$('#auto').onclick = () => cmd({ type: 'autoscene', on: !S.auto.on });
+$('#auto-song').onclick = () => cmd({ type: 'autoscene', onSong: !S.auto.onSong });
+$('#auto-drop').onclick = () => cmd({ type: 'autoscene', onDrop: !S.auto.onDrop });
+$('#auto-shuf').onclick = () => cmd({ type: 'autoscene', shuffle: !S.auto.shuffle });
+$('#auto-bars').onchange = e => cmd({ type: 'autoscene', bars: +e.target.value });
+$('#auto-sens').onchange = e => cmd({ type: 'autoscene', sens: +e.target.value });
+$('#auto-min').onchange = e => cmd({ type: 'autoscene', minSec: +e.target.value });
+$('#auto-mode').onclick = e => { const m = e.target.dataset?.m; if (m) cmd({ type: 'autoscene', mode: m }); };
+$('#auto-all').onclick = e => { e.preventDefault(); cmd({ type: 'autoscene', pool: null }); };
+$('#auto-pool').onclick = e => {
+  const id = e.target.dataset?.id; if (!id) return;
+  const cur = S.auto.pool || S.scenes.map(x => x.id), next = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+  if (next.length) cmd({ type: 'autoscene', pool: next.length === S.scenes.length ? null : next });
+};
 $('#bpm').onchange = e => cmd({ type: 'bpm', bpm: e.target.value });
+$('#lapply').onclick = () => cmd({ type: 'lights', preset: $('#lpre').value || null, apply: true });
+$('#ldyn').onclick = () => cmd({ type: 'lights', dynamic: !S.lights.dynamic });
 $('#lset').onclick = () => cmd({ type: 'lights', mode: 'manual', color: $('#lcol').value });
 $('#lflash').onclick = () => cmd({ type: 'flash', color: $('#lcol').value });
 let taps = []; $('#tap').onclick = () => { const n = performance.now(); taps = taps.filter(t => n - t < 3000); taps.push(n); if (taps.length > 3) cmd({ type: 'bpm', bpm: Math.round(60000 / ((taps.at(-1) - taps[0]) / (taps.length - 1))) }); };
@@ -67,12 +436,97 @@ $('#bake').onclick = async () => {
   }
   refreshCache();
 };
+
+// ---- now playing / queue / lyrics ----
+const player = (action, extra = {}) => cmd({ type: 'player', action, ...extra }).then(r => { $('#p-err').textContent = r.error || ''; if (S) render(); });
+function drawTrack() {
+  $('#ttl').textContent = T?.title || 'Nothing playing'; $('#art-name').textContent = T ? T.artists.join(', ') + (T.album ? ' · ' + T.album : '') : '';
+  $('#dev').textContent = T?.device ? 'Playing on ' + T.device : '';
+  if (T?.art && $('#art').src !== T.art) { $('#art').src = T.art; $('#bg').style.backgroundImage = `url(${T.art})`; }
+  $('#pp-i').setAttribute('d', T?.playing ? 'M6 5h4v14H6zm8 0h4v14h-4z' : 'M8 5v14l11-7z');
+  $('#shuf').classList.toggle('on', !!T?.shuffle); $('#rep').classList.toggle('on', !!T?.repeat && T.repeat !== 'off');
+  if (T?.volume != null && document.activeElement !== $('#vol')) { $('#vol').value = T.volume; $('#volv').textContent = T.volume + '%'; }
+}
+function drawQueue(q) { $('#queue').innerHTML = q?.length ? q.map((t, i) => `<div><span class="n">${i + 1}</span>${t.art ? `<img src="${esc(t.art)}" alt="">` : ''}<span class="t"><b>${esc(t.title)}</b><span class="mut">${esc(t.artists.join(', '))}</span></span></div>`).join('') : '<span class="mut">Nothing queued</span>'; }
+function drawLyrics() {
+  curLine = -2;
+  $('#lyr').innerHTML = !T ? '<span class="mut">No lyrics</span>' : L?.lines?.length ? L.lines.map(l => `<div>${esc(l.text) || '♪'}</div>`).join('') : `<span class="mut">${L === null && T ? 'No lyrics found' : ''}</span>`;
+  lyrEls = [...$('#lyr').children];
+}
+function drawAudio() {
+  const A = S?.audioStatus, live = Date.now() - lastAudioAt < 2000;
+  $('#d-au').className = 'dot ' + (A?.error ? 'bad' : live ? 'ok' : '');
+  $('#aud-src').textContent = A?.error ? `Audio failed: ${A.error}` : live ? `Audio · ${A?.device || 'Windows output'}` : A ? 'Audio: no signal' : 'Audio: starting…';
+  $('#meters').classList.toggle('off', !live);
+  if (!live) ['bass', 'mid', 'high'].forEach(k => $('#m-' + k).style.height = '4%');
+}
+setInterval(drawAudio, 800);
+setInterval(() => {
+  if (!T) { $('#barfill').style.width = '0'; return; }
+  const pos = Math.min(T.durationMs, trackPosMs(T));
+  $('#barfill').style.width = (pos / T.durationMs * 100) + '%'; $('#pos').textContent = fmt(pos); $('#dur').textContent = fmt(T.durationMs);
+  if (L?.synced) {
+    let i = -1; for (let k = 0; k < L.lines.length && L.lines[k].t <= pos; k++) i = k;
+    if (i !== curLine) { lyrEls[curLine]?.classList.remove('cur'); const el = lyrEls[i]; el?.classList.add('cur'); if (el) $('#lyr').scrollTop = el.offsetTop - $('#lyr').clientHeight / 2 + el.clientHeight / 2; curLine = i; }
+  }
+}, 250);
+$('#pp').onclick = () => player(T?.playing ? 'pause' : 'play');
+$('#next').onclick = () => player('next'); $('#prev').onclick = () => player('prev');
+$('#shuf').onclick = () => player('shuffle', { on: !T?.shuffle });
+$('#rep').onclick = () => player('repeat', { mode: { off: 'context', context: 'track', track: 'off' }[T?.repeat || 'off'] });
+$('#vol').oninput = e => { $('#volv').textContent = e.target.value + '%'; };
+$('#vol').onchange = e => player('volume', { percent: e.target.value });
+$('#bar').onclick = e => { if (T) { const r = e.currentTarget.getBoundingClientRect(); player('seek', { ms: (e.clientX - r.left) / r.width * T.durationMs }); } };
+
+// ---- downloads ----
+const DL_KEY = 'oneparty.dl';
+try { const o = JSON.parse(localStorage.getItem(DL_KEY) || '{}'); for (const [id, k] of [['#dl-pl', 'pl'], ['#dl-q', 'q'], ['#dl-n', 'n'], ['#dl-start', 's'], ['#dl-end', 'e'], ['#dl-ck', 'c']]) if (o[k] != null) $(id).value = o[k]; } catch { /* private mode */ }
+const saveDlForm = () => { try { localStorage.setItem(DL_KEY, JSON.stringify({ pl: $('#dl-pl').value, q: $('#dl-q').value, n: $('#dl-n').value, s: $('#dl-start').value, e: $('#dl-end').value, c: $('#dl-ck').value })); } catch { /* ignore */ } };
+const syncDlForm = () => { $('#dl-n-wrap').hidden = $('#dl-pl').value !== 'first'; };
+for (const id of ['#dl-pl', '#dl-q', '#dl-n', '#dl-start', '#dl-end', '#dl-ck']) $(id).addEventListener('change', () => { syncDlForm(); saveDlForm(); });
+syncDlForm();
+$('#dl-add').onclick = () => {
+  const urls = $('#dl-urls').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!urls.length) { $('#dl-st').textContent = 'paste at least one link'; return; }
+  cmd({ type: 'dlAdd', urls, playlist: $('#dl-pl').value, first: +$('#dl-n').value, height: +$('#dl-q').value, cookies: $('#dl-ck').value, start: $('#dl-start').value, end: $('#dl-end').value })
+    .then(r => { $('#dl-st').textContent = r.error || `queued ${r.dl?.added}${r.dl?.rejected?.length ? ` (${r.dl.rejected.length} skipped: not a link)` : ''}`; if (!r.error) $('#dl-urls').value = ''; });
+};
+$('#dl-clear').onclick = () => cmd({ type: 'dlClear' });
+document.addEventListener('click', e => { const b = e.target.closest('button[data-dlx]'); if (b) cmd({ type: 'dlCancel', id: b.dataset.dlx }); });
+function drawDownloads() {
+  const L = S.downloads || [];
+  $('#dl-list').innerHTML = L.map(j => {
+    const name = j.files?.length ? j.files[j.files.length - 1] : j.url;
+    const part = (j.start || j.end ? ` · clip ${j.start || '0:00'}–${j.end || 'end'}` : '') + (j.playlist !== 'single' ? ` · playlist${j.playlist === 'first' ? ' (first ' + j.first + ')' : ''}` : '');
+    const st = j.status === 'downloading' ? `Downloading ${Math.round(j.pct)}%${j.items ? ` · ${j.item}/${j.items}` : ''}` : j.status === 'done' ? `Done · ${j.files.length} file${j.files.length === 1 ? '' : 's'}` : j.status === 'error' ? 'Failed: ' + esc(j.error) : j.status === 'canceled' ? 'Canceled' : 'Queued';
+    return `<div class="dl-job ${j.status}"><div class="t" title="${esc(j.url)}">${esc(name)}</div>${['queued', 'downloading'].includes(j.status) ? `<button data-dlx="${j.id}" title="Cancel">✕</button>` : '<span></span>'}<div class="m">${st}${esc(part)}</div><div class="b"><i style="width:${j.status === 'done' ? 100 : j.pct || 0}%"></i></div></div>`;
+  }).join('');
+}
+
+// ---- YouTube sign-in (automatic cookie capture) ----
+function drawYtAuth() {
+  const y = S.ytLogin || { state: 'idle', cookies: {} }, ck = y.cookies || {};
+  const age = ck.savedAt ? Math.max(1, Math.round((Date.now() - ck.savedAt) / 60000)) : 0;
+  const ago = age < 90 ? `${age} min ago` : age < 2880 ? `${Math.round(age / 60)} h ago` : `${Math.round(age / 1440)} days ago`;
+  $('#yt-auth').className = 'yt-auth ' + (y.state === 'waiting' || y.state === 'capturing' ? 'wait' : ck.present ? 'ok' : '');
+  $('#yt-auth-t').textContent = y.state === 'waiting' ? 'Waiting for you to sign in…' : y.state === 'capturing' ? 'Saving cookies…' : ck.present ? 'Signed in to YouTube' : 'Not signed in to YouTube';
+  $('#yt-auth-m').textContent = y.message || (ck.present ? `Cookies captured ${ago}. Downloads use them automatically.` : 'Click Sign in: a window opens, sign in once, and cookies are captured for you.');
+  $('#yt-signin').textContent = y.state === 'waiting' ? 'Cancel' : ck.present ? 'Refresh' : 'Sign in';
+  $('#yt-forget').hidden = !ck.present || y.state === 'waiting';
+}
+$('#yt-signin').onclick = () => cmd({ type: 'ytLogin', action: (S.ytLogin?.state === 'waiting') ? 'cancel' : 'start' }).then(r => { if (r.error) $('#yt-auth-m').textContent = r.error; });
+$('#yt-forget').onclick = () => { if (confirm('Delete the saved YouTube cookies and sign out?')) cmd({ type: 'ytLogin', action: 'forget' }); };
+
 connect({
-  state: s => { S = s; render(); },
-  track: ({ track }) => { $('#ttl').textContent = track?.title || 'Nothing playing'; $('#art-name').textContent = track ? track.artists.join(', ') : ''; if (track?.art) $('#art').src = track.art; },
-  audio: a => { $('#lvl').style.width = Math.min(100, a.level * 160) + '%'; },
+  state: s => { S = s; if (!T) { T = s.track; L = s.lyrics; drawQueue(s.queue); drawTrack(); drawLyrics(); } render(); },
+  track: ({ track, lyrics }) => { const nt = track?.id !== T?.id; T = track; L = lyrics; drawTrack(); if (nt || lyrics) drawLyrics(); },
+  progress: t => { if (t) { T = t; drawTrack(); } },
+  queue: drawQueue,
+  audio: a => {
+    lastAudioAt = Date.now();
+    $('#m-bass').style.height = Math.max(4, a.bass * 100) + '%'; $('#m-mid').style.height = Math.max(4, a.mid * 100) + '%'; $('#m-high').style.height = Math.max(4, a.high * 100) + '%';
+  },
   cache: refreshCache,
-  fetch: f => { $('#yt-st').textContent = f.error || (f.done ? 'Downloaded.' : f.line || ''); },
 });
 refreshCache();
 </script></body></html>

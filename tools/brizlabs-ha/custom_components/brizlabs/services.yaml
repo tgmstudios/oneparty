@@ -1,0 +1,46 @@
+set_properties:
+  name: Set device properties
+  description: Send native BrizLabs properties to the light over local Bluetooth.
+  fields:
+    address:
+      required: true
+      selector:
+        text:
+    properties:
+      required: true
+      selector:
+        object:
+paint_segments:
+  name: Paint segments
+  description: Set a color on selected zero-based segments of a micro string light.
+  fields:
+    address:
+      required: true
+      selector:
+        text:
+    segments:
+      required: true
+      selector:
+        object:
+    hue:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 360
+    saturation:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+    value:
+      selector:
+        number:
+          min: 0
+          max: 100
+    segment_count:
+      selector:
+        number:
+          min: 1
+          max: 127

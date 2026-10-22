@@ -4,11 +4,32 @@
   "private": true,
   "type": "module",
   "description": "Party visuals hub: Spotify now-playing + lyrics, Home Assistant lighting, live multi-monitor visuals.",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "start": "node server/index.mjs",
-    "party": "node server/index.mjs --launch",
+    "start": "node server/index.mjs --lan",
+    "party": "node server/index.mjs --launch --lan",
     "doctor": "node tools/doctor.mjs",
-    "test": "node --test server/"
+    "test": "node --test server/",
+    "control:dev": "vite --config control/vite.config.js",
+    "control:build": "vite build --config control/vite.config.js",
+    "control:ensure": "node -e \"const f=require('fs');f.existsSync('web/control/index.html')||require('child_process').execSync('npm run control:build',{stdio:'inherit'})\"",
+    "prestart": "npm run control:ensure --silent",
+    "preparty": "npm run control:ensure --silent",
+    "start:local": "node server/index.mjs",
+    "party:local": "node server/index.mjs --launch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "hls.js": "^1.7.3",
+    "vue-router": "^5.4.0",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.10",
+    "vite": "^8.3.4",
+    "vue": "^3.5.44"
   }
 }

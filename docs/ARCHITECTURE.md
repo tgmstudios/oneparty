@@ -18,7 +18,7 @@ Every display is a channel with a `mode`: `live` (render scene), `cached` (play 
 Switching is a `scene`/`mode` command; the display crossfades and disposes the old GL context.
 
 ## Lighting
-`homeassistant.groups[]`: each group has entities, a `kind`, and its own rate limit. Beats from the audio frames drive colour from the
+`homeassistant.groups[]`: each group has entities, a `kind`, and its own rate limit. Beats from the audio frames drive color from the
 active scene's `palette`. WLED groups can also select an `effect` per scene. Blackout and flash are first-class commands.
 
 ## Known limits

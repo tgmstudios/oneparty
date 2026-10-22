@@ -11,7 +11,7 @@ All runtime control goes through `POST /api/cmd` (see `server/index.mjs: command
 ## Workflow
 
 1. **Interview first** (use AskUserQuestion; skip anything already answered):
-   - Event name / subtitle / theme + 2-3 accent colours (these become scene palettes and the HUD accent).
+   - Event name / subtitle / theme + 2-3 accent colors (these become scene palettes and the HUD accent).
    - Monitors: how many, which one is primary, which is the laptop screen (control panel), which plays clips.
    - Audio path: laptop plays Spotify itself (`audioSource: "loopback"`) or mic/line-in (`"mic"`).
    - Spotify: has `SPOTIFY_CLIENT_ID` in `.env`? (developer.spotify.com -> create app, redirect URI `http://127.0.0.1:8787/auth/spotify/callback`).
