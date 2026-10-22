@@ -1,7 +1,7 @@
 // Stage HUD. Per-display toggles are channel overlays: nowplaying | lyrics | bubbles | announcements | motion
 //   right, centre : now-playing card + lyrics
 //   bottom right  : one rotating slot -> message bubbles, announcements, and "Next up" (same card format as now playing)
-//   left          : Spotify Jam QR (pin it, or let it come and go)
+//   left          : Spotify Jam QR + guest-app (costume contest) QR (pin them, or let them come and go)
 import { trackPosMs } from './bus.js';
 
 const esc = x => String(x ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -11,6 +11,7 @@ export function createHud(root) {
   root.innerHTML = `
     <div class="left">
       <div class="jam" hidden><img class="qr" alt=""><div class="j-t">Scan to join the Jam</div><div class="j-s">Spotify Jam</div></div>
+      <div class="jam ct" hidden><img class="qr" alt=""><div class="j-t"></div><div class="j-s"></div></div>
     </div>
     <div class="panel">
       <div class="np" hidden>
@@ -23,7 +24,7 @@ export function createHud(root) {
     <div class="bubbles" hidden><div class="slot"></div></div>
     <div class="bubbles top" hidden><div class="slot top"></div></div>`;
   const $ = s => root.querySelector(s);
-  const np = $('.np'), lyr = $('.lyr'), lines = $('.lines'), jam = $('.jam'), bubbles = $('.bubbles'), slot = $('.slot'), topWrap = $('.bubbles.top'), topSlot = $('.slot.top'), qr = $('.qr');
+  const np = $('.np'), lyr = $('.lyr'), lines = $('.lines'), jam = $('.jam:not(.ct)'), ct = $('.ct'), ctQr = ct.querySelector('.qr'), bubbles = $('.bubbles'), slot = $('.slot'), topWrap = $('.bubbles.top'), topSlot = $('.slot.top'), qr = $('.qr');
   const viz = root.querySelector('.viz');
   const npTtl = np.querySelector('.ttl'), npArtist = np.querySelector('.art-name'), npArt = np.querySelector('.art'), npBar = np.querySelector('.bar i');
 
@@ -106,24 +107,33 @@ export function createHud(root) {
   }
 
   // ---------- Jam QR (left) ----------
-  let qrFor = null, jamPhase = 'idle', jamTimer = 0;
-  function setQr(url) {   // retried until it actually renders; a failure is never cached
-    if (!url) { qr.removeAttribute('src'); qrFor = null; return false; }
-    if (qrFor === url && qr.getAttribute('src')) return true;
-    if (!window.qrcode) return false;
-    try { const q = window.qrcode(0, 'M'); q.addData(url); q.make(); qr.src = q.createDataURL(8, 2); qrFor = url; return true; }
-    catch (e) { console.warn('jam qr:', e.message); return false; }
-  }
-  function jamTick(now) {
-    const want = flags.announcements && cfg.jam?.on && cfg.jam.url;
-    if (!want) { jam.hidden = true; jamPhase = 'idle'; return; }
-    if (!setQr(cfg.jam.url)) { jam.hidden = true; return; }
-    if (cfg.jam.pin) { jam.hidden = false; jam.classList.remove('out'); jamPhase = 'show'; return; }
-    if (now < jamTimer) return;
-    if (jamPhase === 'show') { jam.classList.add('out'); jamPhase = 'out'; jamTimer = now + 700; return; }
-    if (jamPhase === 'out') { jam.hidden = true; jamPhase = 'gap'; jamTimer = now + quietMs(); return; }
-    jam.classList.remove('out'); jam.hidden = false; jamPhase = 'show'; jamTimer = now + cfg.announceSeconds * 1000;
-  }
+  const qrCard = (card, img, label) => {   // one QR card with its own come-and-go cycle (or pinned)
+    let qrFor = null, phase = 'idle', timer = 0;
+    const setQr = url => {   // retried until it actually renders; a failure is never cached
+      if (!url) { img.removeAttribute('src'); qrFor = null; return false; }
+      if (qrFor === url && img.getAttribute('src')) return true;
+      if (!window.qrcode) return false;
+      try { const q = window.qrcode(0, 'M'); q.addData(url); q.make(); img.src = q.createDataURL(8, 2); qrFor = url; return true; }
+      catch (e) { console.warn(label + ' qr:', e.message); return false; }
+    };
+    return (now, url, pin) => {
+      if (!(flags.announcements && url)) { card.hidden = true; phase = 'idle'; return; }
+      if (!setQr(url)) { card.hidden = true; return; }
+      if (pin) { card.hidden = false; card.classList.remove('out'); phase = 'show'; return; }
+      if (now < timer) return;
+      if (phase === 'show') { card.classList.add('out'); phase = 'out'; timer = now + 700; return; }
+      if (phase === 'out') { card.hidden = true; phase = 'gap'; timer = now + quietMs(); return; }
+      card.classList.remove('out'); card.hidden = false; phase = 'show'; timer = now + cfg.announceSeconds * 1000;
+    };
+  };
+  const jamCard = qrCard(jam, qr, 'jam'), contestCard = qrCard(ct, ctQr, 'contest');
+  let contestUrl = '', lastS = null;
+  const jamTick = now => jamCard(now, cfg.jam?.on && cfg.jam.url, cfg.jam?.pin);
+  const contestTick = now => {   // the link is configurable (hud.contest.url); falls back to the connected guest app
+    const k = cfg.contest || {}, url = k.on ? (k.url || lastS?.contest?.url || '') : '';
+    ct.querySelector('.j-t').textContent = k.title || 'Costume contest'; ct.querySelector('.j-s').textContent = k.sub || 'Enter, vote & rate the music';
+    contestUrl = url; contestCard(now, url, k.pin);
+  };
 
   return {
     /** channel = state.channels[id], S = full state */
@@ -135,7 +145,7 @@ export function createHud(root) {
       np.hidden = !flags.nowplaying; lyr.hidden = !flags.lyrics; bubbles.hidden = !(flags.bubbles || flags.announcements); topWrap.hidden = !flags.bubbles;
       root.classList.toggle('motion', flags.motion);
       const h = S.hud || {};
-      cfg = { bubbles: h.bubbles || [], announcements: h.announcements || [], jam: h.jam || {}, bubbleSeconds: h.bubbleSeconds || 6, announceSeconds: h.announceSeconds || 8, quietSeconds: h.quietSeconds ?? 12 };
+      lastS = S; cfg = { bubbles: h.bubbles || [], announcements: h.announcements || [], jam: h.jam || {}, contest: h.contest || {}, bubbleSeconds: h.bubbleSeconds || 6, announceSeconds: h.announceSeconds || 8, quietSeconds: h.quietSeconds ?? 12 };
       if (S.queue) queue = S.queue;
     },
     setQueue(q) { queue = q || []; },
@@ -166,13 +176,14 @@ export function createHud(root) {
         flags: Object.keys(flags).filter(k => flags[k]),
         jam: { configured: !!(cfg.jam?.on && cfg.jam.url), pinned: !!cfg.jam?.pin, visible: !jam.hidden, qrRendered: !!qr.getAttribute('src'), qrLib: !!window.qrcode },
         geo: (() => { if (jam.hidden) return null; const r = jam.getBoundingClientRect(), c = $('.left').getBoundingClientRect(), q = qr.getBoundingClientRect(); return { cardOffsetXFromColumnCenter: Math.round((r.left + r.right) / 2 - (c.left + c.right) / 2), qrOffsetXFromCardCenter: Math.round((q.left + q.right) / 2 - (r.left + r.right) / 2), cardOffsetYFromScreenCenter: Math.round((r.top + r.bottom) / 2 - innerHeight / 2) }; })(),
+        contest: { configured: !!contestUrl, visible: !ct.hidden, qrRendered: !!ctQr.getAttribute('src') },
         slot: bubCur ? { kind: bubCur.className.replace('bub ', '').replace(' out', ''), text: bubCur.textContent.slice(0, 40) } : null,
         announcements: cfg.announcements.length, messages: cfg.bubbles.length,
       };
     },
     tick() {
       const now = performance.now();
-      bubbleTick(now); jamTick(now);
+      bubbleTick(now); jamTick(now); contestTick(now);
       if (!track) { window.oneLyrics = null; return; }
       const pos = Math.max(0, Math.min(track.durationMs, trackPosMs(track, posOffset)));
       // lyrics for scenes (window.oneLyrics): synced lines [{t ms, text}], current index (-1 before the first line), and playback position in ms

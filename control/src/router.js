@@ -7,6 +7,7 @@ import Stage from './pages/Stage.vue';
 import Media from './pages/Media.vue';
 import Displays from './pages/Displays.vue';
 import Zones from './pages/Zones.vue';
+import Contest from './pages/Contest.vue';
 
 // Hash routing: the hub serves one static page, so /control.html#/audio just works (and survives refreshes).
 export const pages = [
@@ -16,6 +17,7 @@ export const pages = [
   { path: '/lights', name: 'Lights', component: Lights },
   { path: '/zones', name: 'Zones', component: Zones },
   { path: '/stage', name: 'Stage', component: Stage },
+  { path: '/contest', name: 'Contest', component: Contest },
   { path: '/displays', name: 'Displays', component: Displays },
   { path: '/media', name: 'Media', component: Media },
 ];

@@ -1,0 +1,8 @@
+node_modules
+web
+data
+*.test.mjs
+README.md
+.env*
+.gitignore
+Dockerfile

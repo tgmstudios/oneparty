@@ -1,3 +1,4 @@
+import { takeoverPopup } from './takeovers.mjs';
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const caption = 'font:14px ui-monospace,monospace;color:var(--op-muted);';
 const rgb = h => h.slice(1).match(/../g).map(v => parseInt(v, 16));
@@ -31,8 +32,8 @@ export function kioskTheme(state) {
 
 // Text stays static; each orientation fetches only its own low-resolution stream.
 export function kioskPopup(state) {
-  if (state.whiteout) return { title: 'Home Assistant Controllers', tag: 'oneparty-kiosks', initial_style: 'fullscreen', dismissable: false, content: '<main data-oneparty-whiteout style="position:fixed;inset:0;width:100%;height:100%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2vmin;font:900 system-ui;color:#111;"><div style="font-size:5vmin;letter-spacing:.1em;">HALLOWEEN @ THE</div><div style="font-size:12vmin;color:#ff7a10;">DAWGHOUSE</div></main>' };
-  if (state.blackout) return { title: 'Home Assistant Controllers', tag: 'oneparty-kiosks', initial_style: 'fullscreen', dismissable: false, content: '<main data-oneparty-blackout style="position:fixed;inset:0;width:100%;height:100%;background:#000;"></main>' };
+  const takeover = state.takeover && state.takeovers?.find(d => d.id === state.takeover);
+  if (takeover) return takeoverPopup(takeover, state);
   const track = state.track, hud = state.hud || {}, theme = kioskTheme(state);
   const welcome = [...new Set([...(hud.bubbles || []), state.kiosks.message].filter(v => typeof v === 'string' && v.trim()))];
   const announcements = (hud.announcements || []).filter(a => a?.title).map(a => `
@@ -68,6 +69,32 @@ export function kioskPopup(state) {
         ${welcome.length ? `<aside style="border-top:1px solid var(--op-border);padding-top:24px;display:flex;flex-wrap:wrap;gap:16px 40px;">${welcome.map(w => `<p style="margin:0;white-space:pre-wrap;font-size:clamp(18px,2.8vmin,26px);line-height:1.4;color:var(--op-muted);">${escape(w)}</p>`).join('')}</aside>` : ''}
         ${picture('portrait')}
       </div>
+    </main>`,
+  };
+}
+
+// Payment screen taped to a drink station: prices, payment QR + link, and a live view of the kiosk's own front camera as a deterrent.
+// The camera is the device's own getUserMedia inside an iframe (Browser Mod renders popup html via innerHTML, where a bare <script> would not run but an iframe's
+// document does). Nothing is recorded or sent anywhere. state.kiosks.payment = { url, title, note }, state.payQr = data: URI or ''.
+const cameraDoc = '<body style="margin:0;background:#111"><video id=v autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;transform:scaleX(-1)"></video><script>navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}},audio:false}).then(function(s){v.srcObject=s;v.play()}).catch(function(){document.body.style.background="#2a2a2a"})</script></body>';
+export function paymentPopup(state) {
+  const p = state.kiosks.payment || {}, url = String(p.url || '').trim(), theme = kioskTheme(state);
+  const shown = url.replace(/^https?:[/][/]/i, '').replace(/[/]$/, '');
+  // Prices come from the announcements (Stage text): every announcement with a title, price on the right when it has one.
+  const menu = ((state.hud || {}).announcements || []).filter(a => a?.title).map(a => `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:20px;padding:10px 0;border-top:1px solid ${theme.border};">
+      <span style="font-size:clamp(22px,4.2vmin,40px);text-align:left;">${escape(a.title)}</span>
+      ${a.price ? `<span style="font-size:clamp(22px,4.2vmin,40px);font-variant-numeric:tabular-nums;white-space:nowrap;color:${theme.accent};">${escape(a.price)}</span>` : ''}
+    </div>`).join('');
+  return {
+    title: 'Home Assistant Controllers', tag: 'oneparty-kiosks', initial_style: 'fullscreen', dismissable: false,
+    content: `<main data-oneparty-payment style="position:fixed;inset:0;box-sizing:border-box;width:100%;height:100%;background:${theme.background};color:${theme.text};padding:clamp(16px,3.5vmin,40px);font-family:Arial,Helvetica,sans-serif;display:flex;flex-direction:column;align-items:center;gap:clamp(12px,2.2vmin,26px);text-align:center;overflow:auto;">
+      <h1 style="margin:0;color:${theme.accent};font:normal clamp(36px,8vmin,84px)/1.05 Georgia,serif;">${escape(p.title || 'Pay here')}</h1>
+      ${menu ? `<div style="width:min(100%,640px);">${menu}</div>` : ''}
+      ${state.payQr ? `<img data-oneparty-qr alt="" src="${escape(state.payQr)}" style="width:min(62vmin,380px);aspect-ratio:1;background:#fff;padding:10px;border-radius:12px;" />` : ''}
+      ${shown ? `<div style="font-size:clamp(20px,4.4vmin,44px);font-weight:700;overflow-wrap:anywhere;">${escape(shown)}</div>` : ''}
+      ${p.note ? `<p style="margin:0;font-size:clamp(16px,2.8vmin,28px);color:${theme.muted};white-space:pre-wrap;">${escape(p.note)}</p>` : ''}
+      <div style="margin-top:auto;"><iframe data-oneparty-camera allow="camera" srcdoc="${escape(cameraDoc)}" style="border:2px solid ${theme.border};border-radius:12px;width:min(34vmin,260px);aspect-ratio:3/4;display:block;background:#111;"></iframe><p style="${caption}margin:6px 0 0;">Live camera</p></div>
     </main>`,
   };
 }

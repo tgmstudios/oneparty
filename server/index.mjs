@@ -21,8 +21,10 @@ import { createDownloads } from './downloads.mjs';
 import { createYtLogin } from './ytlogin.mjs';
 import { PRESETS, resolvePreset, presetName } from './presets.mjs';
 import { createHA } from './ha.mjs';
-import { kioskPopup, kioskSongHue } from './kiosks.mjs';
+import { kioskPopup, kioskSongHue, paymentPopup } from './kiosks.mjs';
 import { createKioskStream } from './kioskstream.mjs';
+import { qrDataUri } from './qr.mjs';
+import { BUILTIN_TAKEOVERS, normalizeTakeover } from './takeovers.mjs';
 const kioskStream = createKioskStream();
 let kioskRenderer = null, kioskStreamPath = '', kioskTokenAt = 0, kioskRendererAt = 0;
 // The kiosk <img> holds one long-lived MJPEG connection that dies with the hub. A popup with an unchanged URL doesn't reload it, so the URL carries an
@@ -66,6 +68,7 @@ async function prepareKioskStream() {
 }
 import { createLightShows, generateShow, distinctColors } from './lightshow.mjs';
 import { createAutoScene, AUTO_DEFAULTS } from './autoscene.mjs';
+import { createContest } from './contest.mjs';
 import { detectScreens, pickScreen, launchWindow, closeAll, killTree, windowPids } from './displays.mjs';
 
 loadEnv();
@@ -124,7 +127,12 @@ function addLocal(name, monitor, extra) {
   state.channels[id] = newLocal(nm, monitor, { scene, ...extra });
   return id;
 }
-const initHud = () => ({ bubbles: [...(event.hud?.bubbles || [`Welcome to ${event.subtitle || 'the party'} @ the ${event.title}`])], announcements: [...(event.hud?.announcements || [])], jam: { ...(event.hud?.jam || { url: '', on: false, pin: false }) }, bubbleSeconds: event.hud?.bubbleSeconds || 6, announceSeconds: event.hud?.announceSeconds || 8, quietSeconds: event.hud?.quietSeconds ?? 12 });
+const initHud = () => ({ bubbles: [...(event.hud?.bubbles || [`Welcome to ${event.subtitle || 'the party'} @ the ${event.title}`])], announcements: [...(event.hud?.announcements || [])], jam: { ...(event.hud?.jam || { url: '', on: false, pin: false }) }, contest: { url: process.env.PARTY_PUBLIC_URL || '', on: false, pin: false, title: 'Costume contest', sub: 'Enter, vote & rate the music', ...(event.hud?.contest || {}) }, bubbleSeconds: event.hud?.bubbleSeconds || 6, announceSeconds: event.hud?.announceSeconds || 8, quietSeconds: event.hud?.quietSeconds ?? 12 });
+function initTakeovers() {
+  const defs = new Map(BUILTIN_TAKEOVERS.map(d => [d.id, d]));
+  for (const raw of event.takeovers || []) { const r = normalizeTakeover(raw, defs.get(String(raw?.id))); if (r.def) defs.set(r.def.id, r.def); }
+  return [...defs.values()];
+}
 const settingsFile = path.join(ROOT, 'events', slug, 'settings.local.json');
 
 // ---------- state ----------
@@ -133,16 +141,20 @@ const state = {
   scenes: event.scenes,
   channels: initChannels(),
   haLocal: process.env.HA_LOCAL_IP || '',   // LAN address of Home Assistant, used instead of HA_URL when set
-  kiosks: { url: '', lastCommand: null, originals: {}, message: 'Welcome to the party!', cameraEntity: null },
+  kiosks: { url: '', roles: {}, payment: { url: '', title: 'Pay here', note: '' }, lastCommand: null, originals: {}, message: 'Welcome to the party!', cameraEntity: null },
   zones: [], zoneStatus: {},   // lighting zones (server/zones.mjs)
   bpmAuto: true, bpmInfo: null,
   auto: { ...AUTO_DEFAULTS, ...(event.autoScene || {}) },
   hud: initHud(),
   hudStatus: {},
   audioMode: 'backend', audioDevices: [], audioDevice: event.audioDevice || null,
-  track: null, lyrics: null, queue: [], sceneStatus: {}, audioStatus: null, gpu: {}, bpm: event.bpm || 120, blackout: false, whiteout: false,
+  track: null, lyrics: null, queue: [], sceneStatus: {}, audioStatus: null, gpu: {}, bpm: event.bpm || 120, blackout: false, whiteout: false,   // blackout/whiteout mirror `takeover` for old consumers
+  takeovers: initTakeovers(), takeover: null,   // user-editable full-screen states (server/takeovers.mjs); takeover = active id
   lights: { mode: event.homeassistant?.mode || 'sync', color: null, preset: null, pin: null, autopilot: event.homeassistant?.autopilot !== false, dynamic: event.homeassistant?.dynamic !== false, last: null },
 };
+// Cloud guest app (public/): costume contest, music ratings, pay info. See server/contest.mjs.
+const contestDir = path.join(cacheDir, 'contest');
+const contest = createContest({ imgDir: contestDir, onChange: () => broadcast('state', publicState()), getTrack: () => state.track });
 // Everything set from the control panel / agents is mirrored to settingsFile (debounced) and re-applied on boot.
 let saveTimer = null, savedAt = null;
 function snapshotSettings() {
@@ -152,10 +164,11 @@ function snapshotSettings() {
     remotes: Object.fromEntries(Object.entries(state.channels).filter(([, c]) => c.remote).map(([id, c]) => [id, { name: c.name, deviceId: c.deviceId, role: c.role, follow: c.follow }])),
     lights: { mode: state.lights.mode, preset: state.lights.preset, pin: state.lights.pin, autopilot: state.lights.autopilot, dynamic: state.lights.dynamic },
     bpm: state.bpmAuto ? { auto: true } : { auto: false, value: state.bpm },
-    kiosks: { url: state.kiosks.url, originals: state.kiosks.originals, message: state.kiosks.message, cameraEntity: state.kiosks.cameraEntity, lastCommand: state.kiosks.lastCommand },
+    kiosks: { url: state.kiosks.url, roles: state.kiosks.roles, payment: state.kiosks.payment, originals: state.kiosks.originals, message: state.kiosks.message, cameraEntity: state.kiosks.cameraEntity, lastCommand: state.kiosks.lastCommand },
     haLocal: state.haLocal,
     auto: state.auto,
-    hud: state.hud, audioDevice: state.audioDevice, zones: state.zones,
+    contest: contest.settings(),
+    hud: state.hud, audioDevice: state.audioDevice, zones: state.zones, takeovers: state.takeovers,
     sceneOpts: Object.fromEntries(state.scenes.filter(s => s.hideOverlays?.length).map(s => [s.id, { hideOverlays: s.hideOverlays }])),
   };
 }
@@ -168,6 +181,8 @@ function applySettings(saved) {
   if (typeof saved.kiosks?.cameraEntity === 'string') state.kiosks.cameraEntity = saved.kiosks.cameraEntity;
   if (typeof saved.kiosks?.message === 'string') state.kiosks.message = saved.kiosks.message;
   if (typeof saved.kiosks?.url === 'string') state.kiosks.url = saved.kiosks.url;
+  if (saved.kiosks?.roles && typeof saved.kiosks.roles === 'object') state.kiosks.roles = saved.kiosks.roles;
+  if (saved.kiosks?.payment && typeof saved.kiosks.payment === 'object') Object.assign(state.kiosks.payment, saved.kiosks.payment);
   if (saved.kiosks?.originals) state.kiosks.originals = saved.kiosks.originals;
   if (saved.kiosks?.lastCommand) state.kiosks.lastCommand = saved.kiosks.lastCommand;
   for (const [id, l] of Object.entries(saved.locals || {})) if (!state.channels[id]) state.channels[id] = newLocal(l.name, l.monitor, { role: REMOTE_ROLES.includes(l.role) ? l.role : 'visuals', fullscreen: l.fullscreen ?? null, follow: l.follow || null });
@@ -183,14 +198,17 @@ function applySettings(saved) {
   if (saved.lights) Object.assign(state.lights, { mode: saved.lights.mode ?? state.lights.mode, preset: saved.lights.preset ?? null, pin: saved.lights.pin ?? null, autopilot: saved.lights.autopilot ?? state.lights.autopilot, dynamic: saved.lights.dynamic ?? state.lights.dynamic });
   if (saved.bpm) { state.bpmAuto = saved.bpm.auto !== false; if (!state.bpmAuto && saved.bpm.value) { state.bpm = +saved.bpm.value; state.bpmInfo = { bpm: state.bpm, source: 'manual' }; } }
   if (saved.auto) state.auto = { ...state.auto, ...saved.auto };
-  if (saved.hud) state.hud = { ...state.hud, ...saved.hud, jam: { ...state.hud.jam, ...(saved.hud.jam || {}) } };
+  if (saved.hud) state.hud = { ...state.hud, ...saved.hud, jam: { ...state.hud.jam, ...(saved.hud.jam || {}) }, contest: { ...state.hud.contest, ...(saved.hud.contest || {}) } };
+  contest.restore(saved.contest);
   if ('audioDevice' in saved) state.audioDevice = saved.audioDevice || null;
   if (Array.isArray(saved.zones)) state.zones = saved.zones;
+  for (const raw of saved.takeovers || []) { const r = normalizeTakeover(raw, state.takeovers.find(d => d.id === raw?.id)); if (r.def) setTakeoverDef(r.def); }
   for (const [id, o] of Object.entries(saved.sceneOpts || {})) { const sc = state.scenes.find(s => s.id === id); if (sc && Array.isArray(o.hideOverlays)) sc.hideOverlays = o.hideOverlays; }
 }
 function resetSettings() {
   fs.rmSync(settingsFile, { force: true }); savedAt = null;
   const keep = Object.entries(state.channels).filter(([, c]) => c.remote);
+  state.takeovers = initTakeovers();
   state.zones = []; try { zones.rebuild(); } catch { /* not created yet */ }
   const keepLocal = Object.entries(state.channels).filter(([, c]) => c.local);
   state.channels = initChannels(); for (const [id, c] of keep) state.channels[id] = remoteDefaults(c.name, c.deviceId, { role: c.role });
@@ -242,7 +260,7 @@ const spotify = createSpotify({
     refreshKioskDashboard().catch(e => console.error('[kiosk dashboard]', e.message));
     if (changed) {
       state.lyrics = null; broadcast('track', { track: t, lyrics: null }); autoScene.onSong();
-      if (t && state.lights.mode === 'sync' && !(state.blackout || state.whiteout) && (shows.hasSong(t.id) || shows.running()?.source === 'song')) lightsDone('song ' + t.title, applyLights(Object.values(state.channels)[0]?.scene));
+      if (t && state.lights.mode === 'sync' && !state.takeover && (shows.hasSong(t.id) || shows.running()?.source === 'song')) lightsDone('song ' + t.title, applyLights(Object.values(state.channels)[0]?.scene));
       if (t) {
         syncBpm(t); spotify.queue().then(q => { state.queue = q; broadcast('queue', q); });
         state.lyrics = await getLyrics(t); broadcast('track', { track: state.track, lyrics: state.lyrics });
@@ -262,7 +280,7 @@ async function syncBpm(t, force) {
   const r = await getBpm(t);
   if (t.id !== state.track?.id || !state.bpmAuto) return;
   bpmFromAudio = !r;   // no database tempo for this song -> follow the beat detected in the audio
-  if (r) { state.bpm = r.bpm; state.bpmInfo = r; if (shows.running()?.source === 'auto' && state.lights.mode === 'sync' && !(state.blackout || state.whiteout)) applyLights(Object.values(state.channels)[0]?.scene); } else state.bpmInfo = { bpm: state.bpm, source: 'audio', raw: 0 };
+  if (r) { state.bpm = r.bpm; state.bpmInfo = r; if (shows.running()?.source === 'auto' && state.lights.mode === 'sync' && !state.takeover) applyLights(Object.values(state.channels)[0]?.scene); } else state.bpmInfo = { bpm: state.bpm, source: 'audio', raw: 0 };
   broadcast('state', publicState());
 }
 
@@ -372,24 +390,56 @@ function displayCmd(c) {
   return { ok: true };
 }
 let kioskDashboardSignature = '';
-let kioskDashboardBusy = false;
+let kioskDashboardBusy = false, kioskDashboardDirty = false;
+// Each kiosk has a role (state.kiosks.roles): 'dashboard' (default; all share one popup) or 'payment' (its own popup: payment link + that kiosk's live front camera, never recorded).
+const kioskRole = d => (state.kiosks.roles[d.browserId] === 'payment' ? 'payment' : 'dashboard');
+function payQrData() {   // the uploaded payment QR as a data: URI (the kiosk page is https, the hub is http)
+  const f = contest.view().payImageUrl; if (!f?.startsWith('/contest/')) return '';
+  try { const file = path.join(contestDir, path.basename(f)), ext = path.extname(file).slice(1).toLowerCase(); return `data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,` + fs.readFileSync(file).toString('base64'); } catch { return ''; }
+}
+async function kioskPlan(devices) {   // [{ ids, popup }]: dashboards share a popup, each payment kiosk gets its own. A takeover overrides every role.
+  const named = devices.filter(d => d.browserId), pay = state.takeover ? [] : named.filter(d => kioskRole(d) === 'payment'), dash = named.filter(d => !pay.includes(d));
+  const plan = dash.length ? [{ ids: dash.map(d => d.browserId), popup: dashboardPopup() }] : [];
+  for (const d of pay) {
+    const pay = { ...state.kiosks.payment, url: state.kiosks.payment.url || contest.view().config?.payUrl || '' };   // uploaded QR image wins, else a QR of the link
+    plan.push({ ids: [d.browserId], popup: paymentPopup({ ...state, payQr: payQrData() || (pay.url ? qrDataUri(pay.url) : ''), kiosks: { ...state.kiosks, payment: pay } }) });
+  }
+  return plan;
+}
+async function pushKioskPopups(devices) {
+  const plan = await kioskPlan(devices);
+  if (!plan.length) return null;
+  for (const { ids, popup } of plan) await ha.call('browser_mod', 'popup', { ...popup, browser_id: ids });
+  return JSON.stringify(plan);
+}
 async function refreshKioskDashboard() {
-  if (!(state.kiosks.lastCommand?.on || state.blackout || state.whiteout) || !ha.enabled || kioskDashboardBusy) return;
-  if (!(state.blackout || state.whiteout)) await prepareKioskStream();
-  const popup = dashboardPopup(), signature = JSON.stringify(popup);
-  if (signature === kioskDashboardSignature) return;
+  if (!(state.kiosks.lastCommand?.on || state.takeover) || !ha.enabled) return;
+  if (kioskDashboardBusy) { kioskDashboardDirty = true; return; }
   kioskDashboardBusy = true;
   try {
-    const devices = await ha.kiosks(), browser_id = devices.map(d => d.browserId).filter(Boolean);
-    if (!browser_id.length) return;
-    await ha.call('browser_mod', 'popup', { ...popup, browser_id });
-    kioskDashboardSignature = signature;
+    if (!state.takeover) await prepareKioskStream();
+    const devices = await ha.kiosks(), plan = JSON.stringify(await kioskPlan(devices));
+    if (plan === kioskDashboardSignature) return;
+    kioskDashboardSignature = (await pushKioskPopups(devices)) || '';
   } finally {
     kioskDashboardBusy = false;
-    if (JSON.stringify(dashboardPopup()) !== signature) refreshKioskDashboard().catch(e => console.error('[kiosk dashboard]', e.message));
+    if (kioskDashboardDirty) { kioskDashboardDirty = false; refreshKioskDashboard().catch(e => console.error('[kiosk dashboard]', e.message)); }
   }
 }
 // Blackout: kiosks go solid black (even if the dashboard was never on); lifting it restores the dashboard, or clears the popup.
+function setTakeoverDef(def) { const i = state.takeovers.findIndex(d => d.id === def.id); if (i < 0) state.takeovers.push(def); else state.takeovers[i] = def; }
+// Activate takeover `id` (or clear with null): displays, kiosk popups and every light follow its definition; edits to the active one re-apply live.
+function applyTakeover(id) {
+  const def = id && state.takeovers.find(d => d.id === id);
+  state.takeover = def ? def.id : null; state.blackout = state.takeover === 'blackout'; state.whiteout = state.takeover === 'whiteout';
+  if (def) shows.stop();
+  kioskBlackout(!!def).catch(e => console.error('[kiosk takeover]', e.message));
+  if (!allLights.length) return;
+  const L = def?.lights;
+  if (!def) return lightsDone('lights back', applyLights(Object.values(state.channels)[0]?.scene));
+  if (L.mode === 'off') return lightsDone(def.id, ha.stopDynamic(allLights).then(() => ha.off(allLights)));
+  if (L.mode === 'color') return lightsDone(def.id, ha.stopDynamic(allLights).then(() => ha.lights(allLights, { color: L.color, brightness: L.brightness, transition: 0.3 }, { minGapMs: 0, key: 'takeover' })));
+}
 async function kioskBlackout(on) {
   if (!ha.enabled) return;
   if (on || state.kiosks.lastCommand?.on) return refreshKioskDashboard();
@@ -416,6 +466,27 @@ async function command(c) {
       await refreshKioskDashboard();
       break;
     }
+    case 'kioskRole': {   // { browserId, role: 'dashboard'|'payment' }
+      if (!c.browserId || !['dashboard', 'payment'].includes(c.role)) return { error: 'browserId and role (dashboard|payment) required' };
+      if (c.role === 'payment') state.kiosks.roles[c.browserId] = 'payment'; else delete state.kiosks.roles[c.browserId];
+      await refreshKioskDashboard(); break; }
+    case 'kioskPayment': {   // { url?, title?, note? } : what payment kiosks show (url falls back to the guest app's payUrl)
+      const p = state.kiosks.payment, str = (v, n) => String(v ?? '').slice(0, n);
+      if ('url' in c) { const u = str(c.url, 300).trim(); if (u && !u.match(/^https?:[/][/]/i)) return { error: 'url must start with http(s)://' }; p.url = u; }
+      if ('title' in c) p.title = str(c.title, 60); if ('note' in c) p.note = str(c.note, 300);
+      await refreshKioskDashboard(); break; }
+    case 'kioskAdd': {   // { browserId, name, role? } : name an unnamed Browser Mod browser "Kiosk - <name>" in Home Assistant so it becomes a kiosk
+      const name = String(c.name || '').trim().slice(0, 40); if (!name) return { error: 'name required' };
+      const r = await ha.nameKiosk(c.browserId, name); if (r.error) return r;
+      if (c.role === 'payment') state.kiosks.roles[c.browserId] = 'payment';
+      await refreshKioskDashboard(); break; }
+    case 'kioskReload': {   // { browserId? } reload the kiosk browser page(s) (all named kiosks if omitted); the popup comes back a few seconds later
+      if (!ha.enabled) return { error: 'Home Assistant is not configured' };
+      const devices = (await ha.kiosks()).filter(d => d.browserId && (!c.browserId || d.browserId === c.browserId));
+      if (!devices.length) return { error: 'kiosk not found' };
+      try { await ha.call('browser_mod', 'refresh', { browser_id: devices.map(d => d.browserId) }); } catch (e) { return { error: 'Reload failed: ' + e.message }; }
+      kioskDashboardSignature = ''; setTimeout(() => refreshKioskDashboard().catch(e => console.error('[kiosk reload]', e.message)), 6000).unref();
+      out.reloaded = devices.map(d => d.name); break; }
     case 'kioskDashboard': {
       if (typeof c.message !== 'string' || c.message.length > 500) return { error: 'Message must be at most 500 characters' };
       state.kiosks.message = c.message;
@@ -431,13 +502,11 @@ async function command(c) {
         if (!browser_id.length) return { error: 'No kiosks found. Name Browser Mod devices "Kiosk - Room name" in Home Assistant first.' };
         if (c.on) {
           await prepareKioskStream();
-          const popup = dashboardPopup();
           for (const d of devices) if (d.online && d.path && !['unknown', 'unavailable'].includes(d.path)) state.kiosks.originals[d.browserId] = { name: d.name, path: d.path, savedAt: Date.now() };
           // Save recovery information before any device receives the takeover command.
           fs.writeFileSync(settingsFile, JSON.stringify(snapshotSettings(), null, 2));
           savedAt = Date.now();
-          await ha.call('browser_mod', 'popup', { ...popup, browser_id });
-          kioskDashboardSignature = JSON.stringify(popup);
+          kioskDashboardSignature = (await pushKioskPopups(devices)) || '';
         } else await ha.call('browser_mod', 'close_popup', { tag: 'oneparty-kiosks', browser_id });
         out.devices = devices;
         state.kiosks.lastCommand = { on: c.on, at: Date.now() };
@@ -445,7 +514,7 @@ async function command(c) {
       break;
     }
     case 'scene': { const ch = state.channels[c.channel]; if (!ch) return { error: 'unknown channel' }; ch.scene = c.scene; ch.mode = c.mode || 'live'; mirrorFrom(c.channel);
-      if (c.channel === Object.keys(state.channels)[0] && state.lights.mode === 'sync' && !(state.blackout || state.whiteout)) lightsDone('scene ' + c.scene, applyLights(c.scene));
+      if (c.channel === Object.keys(state.channels)[0] && state.lights.mode === 'sync' && !state.takeover) lightsDone('scene ' + c.scene, applyLights(c.scene));
       break; }
     case 'autoscene': {   // { on?, channel?, pool?: ["02","05"]|null, bars?, minSec?, onSong?, onDrop?, shuffle?, hypeMatch?, hypeSpread?, mode?: "live|cached", now?: true }
       const a = state.auto, num = (v, lo, hi) => Math.min(hi, Math.max(lo, +v));
@@ -475,7 +544,7 @@ async function command(c) {
         out.steps.kiosks = 'closed';
       } catch (e) { out.steps.kiosks = 'failed: ' + e.message; }
       // Halt every automatic light change first (shows, dynamic loops, sync, zones, autoscene), then set the normal scenes.
-      state.blackout = false; state.whiteout = false; state.auto.on = false; state.lightsHold = true;
+      state.takeover = null; state.blackout = false; state.whiteout = false; state.auto.on = false; state.lightsHold = true;
       shows.stop(); state.lights.pin = null; state.lights.preset = null; state.lights.mode = 'manual';
       if (ha.enabled) {
         try {
@@ -487,12 +556,27 @@ async function command(c) {
       for (const id of Object.keys(state.channels)) windowPids(id).forEach(killTree);
       closeAll(); out.steps.displays = 'closed';
       break; }
-    case 'whiteout': {   // { on } all lights full white, displays show only a spinning 3D DAWGHOUSE on white
-      state.whiteout = !!c.on; if (c.on) { state.blackout = false; shows.stop(); }
-      kioskBlackout(state.whiteout).catch(e => console.error('[kiosk whiteout]', e.message));
-      if (allLights.length) lightsDone(c.on ? 'whiteout' : 'lights back', c.on ? ha.stopDynamic(allLights).then(() => ha.lights(allLights, { color: '#ffffff', brightness: 255, transition: 0.3 }, { minGapMs: 0, key: 'whiteout' })) : applyLights(Object.values(state.channels)[0]?.scene));
+    case 'takeover': {   // { id, on? } toggle (or set with on) a takeover; { id: null } clears. 'whiteout' / 'blackout' below are shortcuts for the built-ins
+      if (c.id && !state.takeovers.some(d => d.id === c.id)) return { error: 'unknown takeover ' + c.id };
+      const on = c.id && (c.on ?? state.takeover !== c.id);
+      if (!on && c.id && state.takeover !== c.id) break;   // turning off one that isn't showing: leave the active one alone
+      applyTakeover(on ? c.id : null); break; }
+    case 'takeoverDef': {   // { action: 'upsert', def } | { action: 'remove', id } | { action: 'reset', id? } : add, edit and delete takeovers without a restart
+      if (c.action === 'upsert') {
+        const r = normalizeTakeover(c.def, state.takeovers.find(d => d.id === String(c.def?.id || '').trim().toLowerCase())); if (r.error) return r;
+        setTakeoverDef(r.def); out.id = r.def.id; if (state.takeover === r.def.id) applyTakeover(r.def.id);
+      } else if (c.action === 'remove') {
+        const d = state.takeovers.find(x => x.id === c.id); if (!d) return { error: 'unknown takeover ' + c.id }; if (d.builtin) return { error: d.label + ' is built in; use reset to restore its defaults' };
+        if (state.takeover === c.id) applyTakeover(null);
+        state.takeovers = state.takeovers.filter(x => x.id !== c.id);
+      } else if (c.action === 'reset') {
+        const ids = c.id ? [c.id] : BUILTIN_TAKEOVERS.map(d => d.id), b = ids.map(id => BUILTIN_TAKEOVERS.find(d => d.id === id));
+        if (b.includes(undefined)) return { error: 'only built-in takeovers can be reset' };
+        b.forEach(setTakeoverDef); if (ids.includes(state.takeover)) applyTakeover(state.takeover);
+      } else return { error: 'action must be upsert, remove or reset' };
       break; }
-    case 'blackout': state.blackout = !!c.on; if (c.on) state.whiteout = false; if (c.on) shows.stop(); kioskBlackout(state.blackout).catch(e => console.error('[kiosk blackout]', e.message)); if (allLights.length) lightsDone(c.on ? 'blackout' : 'lights back', c.on ? ha.stopDynamic(allLights).then(() => ha.off(allLights)) : applyLights(Object.values(state.channels)[0]?.scene)); break;
+    case 'whiteout': return command({ type: 'takeover', id: 'whiteout', on: !!c.on });
+    case 'blackout': return command({ type: 'takeover', id: 'blackout', on: !!c.on });
     case 'bpm': state.bpm = Math.min(220, Math.max(40, +c.bpm || state.bpm)); state.bpmAuto = false; state.bpmInfo = { bpm: state.bpm, source: 'manual' }; break;
     case 'bpmAuto': state.bpmAuto = !!c.on; if (c.on && state.track) await syncBpm(state.track, true); break;
     case 'lights': {
@@ -521,7 +605,7 @@ async function command(c) {
             if (c.scene) shows.bindScene(String(c.scene), c.id);
             if (c.song) { const tid = c.song === true ? state.track?.id : String(c.song); if (!tid) return { error: 'no track playing' }; shows.bindSong(tid, c.id, c.label || (c.song === true && state.track ? `${state.track.title} - ${state.track.artists.join(', ')}` : '')); }
             if (!c.scene && !c.song) return { error: 'bind needs scene and/or song' };
-            if (!state.lights.pin && state.lights.mode === 'sync' && !(state.blackout || state.whiteout)) out.ha = await lightsDone('bind', applyLights(Object.values(state.channels)[0]?.scene)); break; }
+            if (!state.lights.pin && state.lights.mode === 'sync' && !state.takeover) out.ha = await lightsDone('bind', applyLights(Object.values(state.channels)[0]?.scene)); break; }
           case 'unbind': if (c.scene) shows.unbindScene(String(c.scene)); if (c.song) shows.unbindSong(c.song === true ? state.track?.id : String(c.song)); break;
           case 'keep': {   // save the running autopilot show under a song-specific id and bind it to the current song, so it can be hand-tuned
             const cur = shows.current(); if (!cur || shows.running().source !== 'auto') return { error: 'no autopilot show running' };
@@ -548,10 +632,12 @@ async function command(c) {
       if (Array.isArray(c.bubbles)) h.bubbles = c.bubbles.map(x => String(x).trim()).filter(Boolean).slice(0, 30);
       if (Array.isArray(c.announcements)) h.announcements = c.announcements.map(a => ({ title: String(a.title || '').trim(), detail: String(a.detail || '').trim(), category: String(a.category || '').trim().slice(0, 24), price: String(a.price || '').trim().slice(0, 16) })).filter(a => a.title).slice(0, 30);
       if (c.jam) h.jam = { ...h.jam, ...c.jam, url: String(c.jam.url ?? h.jam.url ?? '').trim() };
+      if (c.contest) { const k = c.contest; h.contest = { ...h.contest, ...(k.on != null && { on: !!k.on }), ...(k.pin != null && { pin: !!k.pin }), ...(k.url != null && { url: String(k.url).trim().slice(0, 500) }), ...(k.title != null && { title: String(k.title).trim().slice(0, 40) }), ...(k.sub != null && { sub: String(k.sub).trim().slice(0, 60) }) }; }
       if (c.bubbleSeconds) h.bubbleSeconds = Math.min(30, Math.max(3, +c.bubbleSeconds));
       if (c.quietSeconds != null) h.quietSeconds = Math.min(120, Math.max(0, +c.quietSeconds || 0));
       if (c.announceSeconds) h.announceSeconds = Math.min(60, Math.max(3, +c.announceSeconds));
       break; }
+    case 'contest': { const r = await contest.command(c); if (r.error) return r; break; }   // cloud guest app: {action:'connect|refresh|config|addEntry|editEntry|removeEntry|removeImage|reset|board',...}
     case 'settingsReset': {   // forget every live tweak and go back to what event.json authored
       resetSettings(); shows.stop(); capture.start(state.audioDevice);
       for (const g of groups) ha.stopDynamic(g.entities);
@@ -597,7 +683,7 @@ async function command(c) {
   }
   if (['hud', 'settingsReset', 'scene', 'autoscene', 'display'].includes(c.type)) refreshKioskDashboard().catch(e => console.error('[kiosk dashboard]', e.message));
   broadcast('state', publicState());
-  if (state.lightsHold && ['lights', 'zone', 'lightshow', 'blackout', 'whiteout', 'scene'].includes(c.type)) state.lightsHold = false;
+  if (state.lightsHold && ['lights', 'zone', 'lightshow', 'blackout', 'whiteout', 'takeover', 'scene'].includes(c.type)) state.lightsHold = false;
   zones.sync();   // any command may have changed a display's scene: bring zone lights along
   if (c.type !== 'settingsReset') scheduleSave(); else { try { fs.rmSync(settingsFile, { force: true }); } catch { /* none */ } }
   return out;
@@ -605,7 +691,7 @@ async function command(c) {
 const withPresence = () => Object.fromEntries(Object.entries(state.channels).map(([k, c]) => [k, { ...c, online: !!c.lastSeen && Date.now() - c.lastSeen < 15000 }]));
 const audioListeners = () => audioStream.count;
 const networkInfo = () => ({ lan: HOST !== '127.0.0.1', port: PORT, urls: lanUrls(PORT) });
-const publicState = () => ({ ...state, channels: withPresence(), network: networkInfo(), audioListeners: audioListeners(), presets: PRESETS, lightshows: { ...shows.list(), running: shows.running() }, ha: { enabled: ha.enabled, conn: { ...ha.info(), localIp: state.haLocal, hostEnv: process.env.HA_HOST || '' }, scenePresets: haCfg.presets || {}, lights: zones.baseLights, baseGroups: baseGroups.map(g => ({ name: g.name, kind: g.kind, entities: g.entities })), groups: baseGroups.map(g => ({ name: g.name, kind: g.kind, n: g.entities.length })) }, downloads: downloads.list(), ytLogin: ytlogin.status(), settings: { file: path.relative(ROOT, settingsFile).split(path.sep).join('/'), savedAt }, spotify: { enabled: spotify.enabled, authed: spotify.authed, canControl: spotify.canControl }, kiosk: KIOSK });
+const publicState = () => ({ ...state, channels: withPresence(), network: networkInfo(), audioListeners: audioListeners(), presets: PRESETS, lightshows: { ...shows.list(), running: shows.running() }, ha: { enabled: ha.enabled, conn: { ...ha.info(), localIp: state.haLocal, hostEnv: process.env.HA_HOST || '' }, scenePresets: haCfg.presets || {}, lights: zones.baseLights, baseGroups: baseGroups.map(g => ({ name: g.name, kind: g.kind, entities: g.entities })), groups: baseGroups.map(g => ({ name: g.name, kind: g.kind, n: g.entities.length })) }, contest: contest.view(), downloads: downloads.list(), ytLogin: ytlogin.status(), settings: { file: path.relative(ROOT, settingsFile).split(path.sep).join('/'), savedAt }, spotify: { enabled: spotify.enabled, authed: spotify.authed, canControl: spotify.canControl }, kiosk: KIOSK });
 
 // audio frames come from whichever display captures audio; drive lights from them
 const lastBeat = new Map();
@@ -621,7 +707,7 @@ function onAudio(a) {
       lastBpmPush = Date.now(); state.bpm = next; state.bpmInfo = { bpm: next, raw: a.bpm, source: 'audio' }; broadcast('state', publicState());
     }
   }
-  if (!a.beat || state.lights.mode !== 'sync' || !groups.length || state.blackout || state.whiteout) return;
+  if (!a.beat || state.lights.mode !== 'sync' || !groups.length || state.takeover) return;
   const main = Object.values(state.channels)[0];
   const pal = state.scenes.find(s => s.id === main?.scene)?.palette || ['#ffffff'];
   const now = Date.now(); const base = haCfg.brightness ?? 180;
@@ -773,7 +859,7 @@ function putScene({ id, title, palette, source, remove, hype }) {   // hype kept
 
 // ---------- http ----------
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.ttf': 'font/ttf', '.otf': 'font/otf', '.webm': 'video/webm', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.jpg': 'image/jpeg', '.png': 'image/png' };
-const mounts = [['/cache/', cacheDir], ['/media/', mediaDir], ['/event/', path.join(ROOT, 'events', slug, 'assets')], ['/', path.join(ROOT, 'web')]];
+const mounts = [['/contest/', contestDir], ['/cache/', cacheDir], ['/media/', mediaDir], ['/event/', path.join(ROOT, 'events', slug, 'assets')], ['/', path.join(ROOT, 'web')]];
 const body = req => new Promise((res, rej) => { const b = []; req.on('data', d => b.push(d)); req.on('end', () => res(Buffer.concat(b))); req.on('error', rej); });
 const json = (res, code, o) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
 
@@ -801,6 +887,10 @@ function serveStatic(req, res, pathname) {
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'); const p = u.pathname;
   try {
+    if (p === '/api/contest/image' && req.method === 'POST') {   // raw image bytes -> guest app (entry photo or the Venmo QR); ?id=<entry id>|pay
+      const r = await contest.saveImage(u.searchParams.get('id') === 'pay' ? 'pay' : 'entry', u.searchParams.get('id'), await body(req), req.headers['content-type']);
+      return json(res, r.error ? 400 : 200, r);
+    }
     if (p === '/api/events') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
       clients.add(res); req.on('close', () => clients.delete(res));
@@ -842,7 +932,8 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/kiosk.jpg') return kioskStream.still(res);
     if (p === '/api/kiosk.mjpeg') return kioskStream.stream(req, res);
     if (p === '/api/kiosk-stream') return json(res, 200, kioskStream.status());
-    if (p === '/api/ha-kiosks') { try { return json(res, 200, await ha.kiosks()); } catch (e) { return json(res, 502, { error: e.message }); } }
+    if (p === '/api/ha-browsers') { try { return json(res, 200, await ha.unnamedBrowsers()); } catch (e) { return json(res, 502, { error: e.message }); } }
+    if (p === '/api/ha-kiosks') { try { return json(res, 200, (await ha.kiosks()).map(d => ({ ...d, role: kioskRole(d) }))); } catch (e) { return json(res, 502, { error: e.message }); } }
     if (p === '/api/ha-areas') { try { return json(res, 200, await haAreas(u.searchParams.has('refresh'))); } catch (e) { return json(res, 502, { error: String(e.message || e) }); } }   // HA areas + floors, for the zone importer
     if (p === '/api/screens') return json(res, 200, detectScreens().map((sc, index) => ({ index, ...sc })));   // this PC's monitors, for "add a monitor"
     if (p === '/api/audio-stream' && req.method === 'GET') return audioStream.add(req, res, (u.searchParams.get('device') || '').slice(0, 120));   // displays play the hub's audio from here
@@ -939,6 +1030,7 @@ const HELP = {
     scene: '{type:"scene",channel:"main",scene:"05",mode:"live|cached"}', mode: '{type:"mode",channel,mode:"live|cached|video"}',
     param: '{type:"param",channel,key:"maxH|fps",value}  (render height cap / fps cap)', overlays: '{type:"overlays",channel,overlays:["nowplaying","lyrics"]}',
     hud: '{type:"hud",bubbles:["Welcome..."],announcements:[{category?:str,price?:str,title:"Jungle Juice",detail:"$3"}],jam:{url,on,pin}}  (overlays to enable per display: bubbles, announcements, motion)',
+    contest: '{type:"contest",action:"connect",url,key}  |  {action:"config",entriesOpen?,votingOpen?,ratingOpen?,showResults?,title?,payUrl?,payNote?,payTitle?}  |  {action:"addEntry|editEntry|removeEntry|removeImage|reset",id?,name?,costume?,what?:"votes|ratings|entries|all"}  |  {action:"board",on?,top?,reveal?:n|"next"|"all"|"none"} (leaderboard on displays). Images: POST /api/contest/image?id=<entry|pay> raw bytes. Guest app QR: hud {contest:{url,on,pin}}',
     settingsReset: '{type:"settingsReset"}  (forget live tweaks; back to event.json defaults)',
     dlAdd: '{type:"dlAdd",urls:["https://... @ 1:20-2:10"],playlist:"single|all|first",first:5,height:1080,start?,end?}  (queue; one at a time)',
     ytLogin: '{type:"ytLogin",action:"start|cancel|forget"}  (opens a sign-in window; cookies.txt is written automatically)',
@@ -966,6 +1058,7 @@ server.on('error', error => {
   process.exit(1);
 });
 server.listen(PORT, HOST, () => {
+  contest.start();
   console.log(`oneparty: ${KIOSK ? 'KIOSK (fullscreen)' : 'dev (windowed)'} "${event.title}" [${slug}] on http://127.0.0.1:${PORT}  (control: /control.html)`);
   if (HOST !== '127.0.0.1') { const u = lanUrls(PORT); console.log('  LAN: other devices open ' + (u[0] ? u[0].url + '/join.html' : 'http://<this-pc-ip>:' + PORT + '/join.html') + (u.length > 1 ? '   (also: ' + u.slice(1).map(x => x.url).join(', ') + ')' : '')); }
   else console.log('  LAN: off (this hub only answers on 127.0.0.1). Restart with --lan to let a Surface/other screens join.');

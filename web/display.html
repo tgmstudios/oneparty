@@ -62,6 +62,24 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none;font-
 #white{opacity:0;pointer-events:none;z-index:9;background:#fff}
 #white.on{opacity:1}
 #white canvas{width:100%;height:100%;display:block}
+/* costume contest leaderboard (web/js/leaderboard.js) */
+#board{z-index:8;pointer-events:none;display:flex;flex-direction:column;padding:4vh 7vw 3vh;box-sizing:border-box;font-family:Inter,"Segoe UI",system-ui,sans-serif;background:radial-gradient(120% 90% at 50% 0%,color-mix(in srgb,var(--accent) 32%,#0a0610),#05030a 72%);opacity:0;visibility:hidden;transition:opacity .6s,visibility 0s .6s;overflow:hidden}
+#board.on{opacity:1;visibility:visible;transition:opacity .6s}
+.bd-head{text-align:center;margin-bottom:2.4vh}.bd-k{font-size:2vh;letter-spacing:.35em;opacity:.6}.bd-t{font-size:7vh;font-weight:900;letter-spacing:-.02em;line-height:1.05;text-shadow:0 0 4vh color-mix(in srgb,var(--accent) 70%,transparent)}.bd-s{font-size:2.6vh;letter-spacing:.3em;color:var(--accent);font-weight:800}
+.bd-list{flex:1;display:flex;flex-direction:column;gap:1.4vh;min-height:0}
+.bd-row{flex:1;min-height:0;display:flex;align-items:center;gap:2.4vw;padding:1vh 2vw;border-radius:2.2vh;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);opacity:.5;transition:flex .6s,opacity .5s,background .5s}
+.bd-row.show{opacity:1;background:rgba(255,255,255,.1)}
+.bd-row.win{flex:1.7;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 55%,transparent),rgba(255,255,255,.1));border-color:var(--accent);box-shadow:0 0 6vh color-mix(in srgb,var(--accent) 60%,transparent)}
+.bd-row.pop{animation:bdPop .8s cubic-bezier(.2,1.1,.3,1.15) both}
+@keyframes bdPop{0%{transform:scale(.85) translateY(4vh);opacity:0}60%{transform:scale(1.03)}100%{transform:none;opacity:1}}
+.bd-rank{font-size:5vh;font-weight:900;width:8vh;text-align:center;flex:none}
+.bd-img{height:100%;max-height:22vh;aspect-ratio:1;object-fit:cover;border-radius:1.6vh;background:#1b1325;flex:none}
+.bd-mid{flex:1;min-width:0}.bd-c{font-size:4.6vh;font-weight:800;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bd-n{font-size:2.8vh;opacity:.75;min-height:3vh}
+.bd-bar{height:1.2vh;border-radius:1vh;background:rgba(255,255,255,.12);margin-top:1vh;overflow:hidden}.bd-fill{height:100%;width:0;background:var(--accent);transition:width 1s cubic-bezier(.2,.8,.2,1)}
+.bd-v{font-size:3.4vh;font-weight:800;min-width:11vw;text-align:right;flex:none}
+.bd-foot{text-align:center;font-size:2vh;opacity:.5;margin-top:1.6vh;letter-spacing:.1em}
+.bd-conf{position:absolute;top:-4vh;border-radius:.15vw;animation:bdFall linear forwards}
+@keyframes bdFall{to{transform:translate(var(--dx),112vh) rotate(var(--r))}}
 #err{position:absolute;left:1vw;top:1vw;font:12px monospace;color:#f66;z-index:10;white-space:pre-wrap}
 
 /* NEXT UP bubble = same card as now playing */
@@ -119,7 +137,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:none;font-
 .motion .viz{display:block}
 .bub .bt,.bub .a-t,.bub .a-d{white-space:pre-line}
 </style></head><body>
-<div id="stage" class="layer"></div><div id="hud" class="layer"></div><div id="veil" class="layer"></div><div id="white" class="layer"></div><div id="err"></div>
+<div id="stage" class="layer"></div><div id="hud" class="layer"></div><div id="board" class="layer"></div><div id="veil" class="layer"></div><div id="white" class="layer"></div><div id="err"></div>
 <script src="/vendor/qrcode.js"></script>
 <script type="module" src="/js/display.js"></script>
 </body></html>

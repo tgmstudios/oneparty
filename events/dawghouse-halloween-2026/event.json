@@ -794,6 +794,21 @@
         "jumpy": 5,
         "score": 6
       }
+    },
+    {
+      "id": "skeleton-ball",
+      "title": "Skeleton Ball",
+      "palette": [
+        "#ff7a18",
+        "#40ff9a",
+        "#b450ff",
+        "#ffd040"
+      ],
+      "hype": {
+        "busy": 8,
+        "jumpy": 7,
+        "score": 7.5
+      }
     }
   ],
   "homeassistant": {

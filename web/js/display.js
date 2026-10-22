@@ -6,6 +6,7 @@ import { startAudio } from './audio.js';
 import { createBeatTracker } from './beat.js';
 import { createHubAudio } from './hubaudio.js';
 import { createWhiteout } from './whiteout.js';
+import { createBoard } from './leaderboard.js';
 
 const Q = new URLSearchParams(location.search), id = Q.get('id') || 'main';
 let streamBusy = false, streamAt = 0;
@@ -51,6 +52,7 @@ function channels(dt) {
 }
 let beatEnv = 0, bassSm = 0, gridAt = 0, seenAt = 0;
 const hud = createHud($('#hud'));
+const board = createBoard($('#board'));
 const tracker = createBeatTracker(); let barsDone = 0, lastBarPos = 0, bt = { locked: false }, hueOff = 0, hueOut = 0, lastMode = null;
 const feedBeat = a => { if (a.onset !== undefined) tracker.push(performance.now(), a.onset, a.bflux || 0); };
 const sstep = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
@@ -72,6 +74,18 @@ function maybeCapture() {
     .catch(e => { capture = null; err('audio capture: ' + e.message); report({ kind: 'audio', error: e.message }); });
 }
 
+// Takeover = the hub's active full-screen state (S.takeover, defined in S.takeovers): solid color / sandboxed html on #veil, or the 3D whiteout. Definitions change live.
+let takeSig = '';
+function applyTakeover() {
+  const d = S?.takeover && S.takeovers?.find(x => x.id === S.takeover), disp = d?.display, flat = disp && disp.type !== 'whiteout3d';
+  setWhiteout(disp?.type === 'whiteout3d');
+  const veil = $('#veil'), sig = flat ? JSON.stringify(disp) : '';
+  veil.classList.toggle('on', !!flat);
+  if (sig === takeSig) return; takeSig = sig;
+  veil.style.background = flat ? disp.color || '#000' : '';
+  veil.replaceChildren();
+  if (flat && disp.type === 'html') { const f = document.createElement('iframe'); f.setAttribute('sandbox', ''); f.style.cssText = 'border:0;width:100%;height:100%'; f.srcdoc = '<body style="margin:0;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font:900 5vmin system-ui">' + (disp.html || '') + '</body>'; veil.appendChild(f); }
+}
 let whiteout; const setWhiteout = on => { try { (whiteout ??= createWhiteout($('#white'))).set(on).catch(e => err('whiteout: ' + e.message)); } catch (e) { err('whiteout: ' + e.message); } };
 // ---------- live scene ----------
 async function loadFonts(THREE_lib) {
@@ -244,8 +258,7 @@ function frame(now) {
   beatEnv *= Math.pow(0.001, dt);            // ~0.5 s decay
   bassSm += (audio.bass - bassSm) * Math.min(1, dt * 12); channels(dt);
   try { hud.tick(); hud.audio(audio, beatEnv); } catch (e) { if (!hudErr) { hudErr = true; console.error('hud:', e); report({ kind: 'hud', status: { error: String(e.stack || e) } }); } }   // the HUD must never stop the scene from rendering
-  $('#veil').classList.toggle('on', !!S?.blackout);
-  setWhiteout(!!S?.whiteout);
+  applyTakeover();
   const a = active; if (!a) return;
   const R = Math.max(0, Math.min(1, +param('react', 1)));                         // music reactivity of the picture: 0 off .. 1 full
   if (a.kind === 'stream') return;
@@ -289,7 +302,7 @@ setInterval(() => report({ kind: 'ping' }), 5000); report({ kind: 'ping' });   /
 addEventListener('resize', () => active?.resize?.());
 addEventListener('dblclick', () => document.documentElement.requestFullscreen?.().catch(() => {}));
 connect({
-  state: s => { S = s; document.documentElement.style.setProperty('--accent', s.event.theme?.accent || '#ff6a10'); refreshHud(); apply(); maybeCapture(); },
+  state: s => { S = s; document.documentElement.style.setProperty('--accent', s.event.theme?.accent || '#ff6a10'); refreshHud(); apply(); maybeCapture(); try { board.update(s); } catch (e) { console.error('board:', e); } },
   refresh: ({ channel }) => { if (!channel || channel === id) location.reload(); },
   track: ({ track, lyrics }) => hud.setTrack(track, lyrics),
   progress: t => hud.setProgress(t),

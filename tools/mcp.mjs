@@ -59,7 +59,7 @@ const server = new McpServer({ name: 'oneparty', version: '0.1.0' });
 tool('state', 'Summary of the whole hub: now playing, channels (what each display shows), scenes ([baked]/[ERROR]), lights, audio capture status, downloads. Call this first.', {}, async () => {
   const s = await api('/api/state'), cached = await api('/api/cache');
   return text({
-    event: s.event?.title, mode: s.kiosk ? 'kiosk' : 'dev', bpm: s.bpm, blackout: s.blackout, whiteout: s.whiteout,
+    event: s.event?.title, mode: s.kiosk ? 'kiosk' : 'dev', bpm: s.bpm, blackout: s.blackout, whiteout: s.whiteout, takeover: s.takeover,
     track: s.track && { title: s.track.title, artists: s.track.artists, playing: s.track.playing, progressMs: s.track.progressMs, durationMs: s.track.durationMs },
     channels: s.channels,
     scenes: s.scenes.map(x => ({ id: x.id, title: x.title, baked: cached.includes(x.id + '.webm'), error: s.sceneStatus[x.id]?.ok === false ? s.sceneStatus[x.id].error : undefined })),

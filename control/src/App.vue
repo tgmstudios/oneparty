@@ -36,8 +36,7 @@ const launch = () => fetch('/api/launch', { method: 'POST' });
       </span>
       <button class="on" title="Guided setup: network, monitors, devices, zones, kiosks" @click="onboarding = true">Onboarding</button>
       <button title="Open any display windows that aren't open (existing ones are reused)" @click="launch">Open displays</button>
-      <button id="wht" :class="{ on: S.whiteout }" @click="cmd({ type: 'whiteout', on: !S.whiteout })">{{ S.whiteout ? 'Whiteout ON' : 'Whiteout' }}</button>
-      <button id="blk" :class="{ on: S.blackout }" @click="cmd({ type: 'blackout', on: !S.blackout })">{{ S.blackout ? 'Blackout ON' : 'Blackout' }}</button>
+      <button v-for="d in S.takeovers" :key="d.id" :id="d.id === 'whiteout' ? 'wht' : d.id === 'blackout' ? 'blk' : undefined" :class="{ on: S.takeover === d.id }" @click="cmd({ type: 'takeover', id: d.id })">{{ S.takeover === d.id ? d.label + ' ON' : d.label }}</button>
       <button id="close-party" title="Close kiosk prompts, restore normal lights, close all displays" @click="closeParty">Close</button>
       </div>
     </header>

@@ -157,9 +157,38 @@ export function createHA({ url, token, localIp = '', host = '', log = console.lo
       const out = await r.json();
       return out.type === 'create_entry' ? { ok: true, changed: true, from: cur, to: want } : { error: 'HA rejected camera URL: ' + JSON.stringify(out.errors || out.type) };
     },
+    // Browser Mod browsers that are online but not named "Kiosk - …" yet (so kiosks() ignores them).
+    async unnamedBrowsers() {
+      if (!enabled) return [];
+      const template = "{% set ns=namespace(items=[]) %}{% for e in integration_entities('browser_mod') %}{% if e.endswith('_browser_id') %}{% set d=device_id(e) %}{% set name=device_attr(d,'name_by_user') or '' %}{% if not name.startswith('Kiosk - ') and states(e) not in ['unknown','unavailable'] %}{% set ns.items=ns.items+[{'browserId':device_attr(d,'name'),'name':name,'path':states(e[:-3] ~ '_path'),'camera':(device_entities(d)|select('match','camera[.]')|first|default(''))}] %}{% endif %}{% endif %}{% endfor %}{{ ns.items|tojson }}";
+      const r = await hfetch(base() + '/api/template', { method: 'POST', headers, body: JSON.stringify({ template }), signal: AbortSignal.timeout(10000) });
+      if (!r.ok) throw new Error('HA browser discovery -> ' + r.status);
+      return r.json();
+    },
+    // Give a Browser Mod browser the device name "Kiosk - <name>" (device registry update over a one-shot WebSocket) so kiosks() finds it.
+    async nameKiosk(browserId, name) {
+      if (!enabled) return { error: 'Home Assistant is not configured' };
+      if (!/^browser_mod_[a-zA-Z0-9_-]+$/.test(browserId || '')) return { error: 'Invalid browser id' };
+      const r = await hfetch(base() + '/api/template', { method: 'POST', headers, body: JSON.stringify({ template: "{% for e in integration_entities('browser_mod') %}{% if e.endswith('_browser_id') and device_attr(device_id(e),'name') == '" + browserId + "' %}{{ device_id(e) }}{% endif %}{% endfor %}" }), signal: AbortSignal.timeout(10000) });
+      const deviceId = r.ok ? (await r.text()).trim() : '';
+      if (!deviceId) return { error: 'HA has no such Browser Mod device' };
+      const target = trim(base()).replace(/^http/, 'ws') + '/api/websocket';
+      const opts = local ? { headers: local.host ? { host: local.host } : {}, ...(target.startsWith('wss:') && { rejectUnauthorized: false, servername: local.host.split(':')[0] }) } : {};
+      return new Promise(resolve => {
+        const s = new WebSocket(target, opts), done = v => { clearTimeout(t); try { s.close(); } catch {} resolve(v); }, t = setTimeout(() => done({ error: 'HA websocket timeout' }), 10000);
+        s.on('error', e => done({ error: e.message }));
+        s.on('message', raw => {
+          let m; try { m = JSON.parse(raw); } catch { return; }
+          if (m.type === 'auth_required') s.send(JSON.stringify({ type: 'auth', access_token: token }));
+          else if (m.type === 'auth_ok') s.send(JSON.stringify({ id: 1, type: 'config/device_registry/update', device_id: deviceId, name_by_user: 'Kiosk - ' + name }));
+          else if (m.type === 'auth_invalid') done({ error: 'HA rejected the token' });
+          else if (m.type === 'result') done(m.success ? { ok: true } : { error: m.error?.message || 'HA refused the rename (the token needs admin rights)' });
+        });
+      });
+    },
     async kiosks() {
       if (!enabled) return [];
-      const template = `{% set ns=namespace(items=[]) %}{% for e in integration_entities('browser_mod') %}{% set d=device_id(e) %}{% set name=device_attr(d,'name_by_user') or '' %}{% if e.endswith('_browser_id') and name.startswith('Kiosk - ') %}{% set ns.items=ns.items+[{'name':name,'browserId':device_attr(d,'name'),'online':states(e) not in ['unknown','unavailable'],'path':states(e[:-3] ~ '_path')}] %}{% endif %}{% endfor %}{{ ns.items|tojson }}`;
+      const template = `{% set ns=namespace(items=[]) %}{% for e in integration_entities('browser_mod') %}{% set d=device_id(e) %}{% set name=device_attr(d,'name_by_user') or '' %}{% if e.endswith('_browser_id') and name.startswith('Kiosk - ') %}{% set ns.items=ns.items+[{'name':name,'browserId':device_attr(d,'name'),'online':states(e) not in ['unknown','unavailable'],'path':states(e[:-3] ~ '_path'),'camera':(device_entities(d)|select('match','camera[.]')|first|default(''))}] %}{% endif %}{% endfor %}{{ ns.items|tojson }}`;
       const r = await hfetch(base() + '/api/template', { method: 'POST', headers, body: JSON.stringify({ template }), signal: AbortSignal.timeout(10000) });
       if (!r.ok) throw new Error('HA kiosk discovery -> ' + r.status);
       return r.json();

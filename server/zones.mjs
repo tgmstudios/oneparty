@@ -66,8 +66,9 @@ export function createZones({ state, ha, baseGroups, groups, allLights, haCfg, r
     state.zoneStatus[id] = st;
     if (!z.lights.length || !ha.enabled) { st.ok = true; st.note = z.lights.length ? 'Home Assistant not configured' : 'no lights in this zone'; return; }
     try {
-      if (state.whiteout) { await ha.stopDynamic(z.lights); const r = await ha.lights(z.lights, { color: '#ffffff', brightness: 255, transition: 0.3 }, { key: 'zone:' + id, minGapMs: 0 }); st.ok = !r?.error; st.via = 'whiteout'; return; }
-      if (state.blackout || z.mode === 'off') { await ha.stopDynamic(z.lights); const r = await ha.off(z.lights); st.ok = !r?.error; st.via = state.blackout ? 'blackout' : 'off'; return; }
+      const tl = state.takeover && state.takeovers.find(d => d.id === state.takeover)?.lights;
+      if (tl?.mode === 'color') { await ha.stopDynamic(z.lights); const r = await ha.lights(z.lights, { color: tl.color, brightness: tl.brightness, transition: 0.3 }, { key: 'zone:' + id, minGapMs: 0 }); st.ok = !r?.error; st.via = state.takeover; return; }
+      if (tl?.mode === 'off' || z.mode === 'off') { await ha.stopDynamic(z.lights); const r = await ha.off(z.lights); st.ok = !r?.error; st.via = tl?.mode === 'off' ? state.takeover : 'off'; return; }
       if (z.mode === 'color') {
         await ha.stopDynamic(z.lights);
         const r = await ha.lights(z.lights, { color: z.color, brightness: z.brightness ?? haCfg.brightness ?? 180, transition: 1 }, { key: 'zone:' + id, minGapMs: 0 });
@@ -93,7 +94,7 @@ export function createZones({ state, ha, baseGroups, groups, allLights, haCfg, r
     } catch (e) { st.ok = false; st.error = e.message; log('[zones]', e.message); }
   }
 
-  const signature = z => [display(z), sceneOf(z), z.mode, z.color, z.brightness, z.dynamic, state.lights.dynamic, z.preset, state.blackout, state.whiteout, z.lights.join(',')].join('|');
+  const signature = z => [display(z), sceneOf(z), z.mode, z.color, z.brightness, z.dynamic, state.lights.dynamic, z.preset, state.takeover, JSON.stringify(state.takeovers?.find(d => d.id === state.takeover)?.lights), z.lights.join(',')].join('|');
   /** apply every zone whose inputs changed since the last apply (cheap: call it after any command) */
   function sync(force = false) {
     if (state.lightsHold) return;
@@ -107,7 +108,7 @@ export function createZones({ state, ha, baseGroups, groups, allLights, haCfg, r
   }
   /** beat pulse: brighten the zone on each beat, rate-limited per light kind (slow bulbs vs fast strips) */
   function onBeat(a) {
-    if (!a.beat || state.blackout || state.whiteout || state.lightsHold) return;
+    if (!a.beat || state.takeover || state.lightsHold) return;
     const now = Date.now(), base = haCfg.brightness ?? 180;
     for (const z of state.zones) {
       if (z.mode !== 'follow' || !z.beat || !z.lights.length) continue;
