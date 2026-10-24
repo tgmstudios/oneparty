@@ -122,7 +122,7 @@ export function createHud(root) {
       if (pin) { card.hidden = false; card.classList.remove('out'); phase = 'show'; return; }
       if (now < timer) return;
       if (phase === 'show') { card.classList.add('out'); phase = 'out'; timer = now + 700; return; }
-      if (phase === 'out') { card.hidden = true; phase = 'gap'; timer = now + quietMs(); return; }
+      if (phase === 'out') { card.hidden = true; phase = 'gap'; timer = now + Math.max(quietMs() * 4, 60000); return; }   // left-side QRs: rare (>= 1 min apart)
       card.classList.remove('out'); card.hidden = false; phase = 'show'; timer = now + cfg.announceSeconds * 1000;
     };
   };

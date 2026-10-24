@@ -55,6 +55,21 @@ export function createHA({ url, token, localIp = '', host = '', log = console.lo
   }
   const last = new Map();
 
+  // Light capability cache (refreshed every 5 min, in the background after the first call)
+  const caps = new Map(), stepSent = new Map(), overrides = { stepped: new Set(), smooth: new Set() };
+  let stepGapMs = 3000, stepMinDelta = 30, capsAt = 0, capsBusy = null;
+  const steppedLight = e => overrides.stepped.has(e) || (!overrides.smooth.has(e) && caps.get(e) === false);
+  function refreshCaps(wait) {
+    if (!enabled || (!wait && Date.now() - capsAt < 300000) || capsBusy) return wait ? capsBusy : undefined;
+    capsAt = Date.now();
+    capsBusy = hfetch(base() + '/api/states', { headers, signal: AbortSignal.timeout(10000) })
+      .then(r => r.ok ? r.json() : [])
+      .then(all => { for (const st of all) if (st.entity_id.startsWith('light.')) { const f = st.attributes?.supported_features; if (typeof f === 'number') caps.set(st.entity_id, !!(f & 32)); } })
+      .catch(e => log('[ha] light capabilities:', e.message))
+      .finally(() => { capsBusy = null; });
+    return capsBusy;
+  }
+
   // Persistent WebSocket (/api/websocket): service calls skip the per-request HTTP/TLS/auth cost and replies are matched by id.
   // Opened lazily on the first call; while it is down (connecting, dropped, auth failed) calls fall back to REST.
   const wsOn = process.env.HA_WS === '1';   // opt-in: measured no faster than REST on this setup
@@ -194,15 +209,45 @@ export function createHA({ url, token, localIp = '', host = '', log = console.lo
       return r.json();
     },
     // lights: entity ids. opts: {color:'#rrggbb', brightness:0-255, transition:s}
-    async lights(lights, { color, brightness, transition = 0.4, effect } = {}, { minGapMs = 250, key = 'default' } = {}) {
+    // Bulbs that can't fade (no TRANSITION feature) snap on every change, which looks harsh when driven by the beat. Those are throttled:
+    // at most one update per stepGapMs each, and tiny changes are dropped. Fading bulbs and WLED keep updating at the caller's pace.
+    // `urgent` (flash, takeovers, scene changes) bypasses the throttle.
+    async lights(lights, { color, brightness, transition = 0.4, effect } = {}, { minGapMs = 250, key = 'default', urgent = false } = {}) {
       const now = Date.now();
       if (now - (last.get(key) || 0) < minGapMs) return { skipped: 'rate-limited' };
       last.set(key, now);
-      const data = { entity_id: lights, transition };
-      if (color) data.rgb_color = hex(color);
-      if (effect) data.effect = effect;
-      if (brightness != null) data.brightness = Math.max(1, Math.min(255, Math.round(brightness)));
-      try { return await call('light', 'turn_on', data); } catch (e) { log('[ha]', e.message); return { error: e.message }; }
+      refreshCaps();
+      const smooth = [], stepped = [];
+      for (const e of lights) {
+        if (!steppedLight(e)) { smooth.push(e); continue; }
+        const prev = stepSent.get(e), bri = brightness == null ? null : Math.round(brightness);
+        if (!urgent && prev && !effect) {
+          if (now - prev.at < stepGapMs) continue;
+          if (prev.color === (color || '') && (bri == null || prev.bri == null || Math.abs(bri - prev.bri) < stepMinDelta)) continue;
+        }
+        stepSent.set(e, { at: now, color: color || '', bri });
+        stepped.push(e);
+      }
+      const send = async (ents, tr) => {
+        const data = { entity_id: ents };
+        if (tr != null) data.transition = tr;
+        if (color) data.rgb_color = hex(color);
+        if (effect) data.effect = effect;
+        if (brightness != null) data.brightness = Math.max(1, Math.min(255, Math.round(brightness)));
+        try { return await call('light', 'turn_on', data); } catch (e) { log('[ha]', e.message); return { error: e.message }; }
+      };
+      const rs = [];
+      if (smooth.length) rs.push(send(smooth, transition));
+      if (stepped.length) rs.push(send(stepped, null));
+      if (!rs.length) return { skipped: 'stepped lights throttled' };
+      return (await Promise.all(rs)).find(r => r?.error) || { ok: true };
+    },
+    // Which lights fade: { entity: true|false } from supported_features bit 32 (TRANSITION), plus event.json overrides.
+    async lightCaps() { await refreshCaps(true); return Object.fromEntries([...caps].map(([e, v]) => [e, !steppedLight(e)])); },
+    setLightOverrides({ stepped = [], smooth = [], gapMs, minDelta } = {}) {
+      overrides.stepped = new Set(stepped); overrides.smooth = new Set(smooth);
+      if (gapMs != null) stepGapMs = gapMs;
+      if (minDelta != null) stepMinDelta = minDelta;
     },
     // scene_presets integration (Hypfer/hass-scene_presets): spreads a Hue-style preset's colors across the lights,
     // smart-shuffled so neighbours blend. apply_preset = once; dynamic = loop that re-shuffles every `interval` s.

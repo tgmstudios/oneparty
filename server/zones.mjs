@@ -67,11 +67,11 @@ export function createZones({ state, ha, baseGroups, groups, allLights, haCfg, r
     if (!z.lights.length || !ha.enabled) { st.ok = true; st.note = z.lights.length ? 'Home Assistant not configured' : 'no lights in this zone'; return; }
     try {
       const tl = state.takeover && state.takeovers.find(d => d.id === state.takeover)?.lights;
-      if (tl?.mode === 'color') { await ha.stopDynamic(z.lights); const r = await ha.lights(z.lights, { color: tl.color, brightness: tl.brightness, transition: 0.3 }, { key: 'zone:' + id, minGapMs: 0 }); st.ok = !r?.error; st.via = state.takeover; return; }
+      if (tl?.mode === 'color') { await ha.stopDynamic(z.lights); const r = await ha.lights(z.lights, { color: tl.color, brightness: tl.brightness, transition: 0.3 }, { key: 'zone:' + id, minGapMs: 0, urgent: true }); st.ok = !r?.error; st.via = state.takeover; return; }
       if (tl?.mode === 'off' || z.mode === 'off') { await ha.stopDynamic(z.lights); const r = await ha.off(z.lights); st.ok = !r?.error; st.via = tl?.mode === 'off' ? state.takeover : 'off'; return; }
       if (z.mode === 'color') {
         await ha.stopDynamic(z.lights);
-        const r = await ha.lights(z.lights, { color: z.color, brightness: z.brightness ?? haCfg.brightness ?? 180, transition: 1 }, { key: 'zone:' + id, minGapMs: 0 });
+        const r = await ha.lights(z.lights, { color: z.color, brightness: z.brightness ?? haCfg.brightness ?? 180, transition: 1 }, { key: 'zone:' + id, minGapMs: 0, urgent: true });
         st.ok = !r?.error; st.via = 'color'; return;
       }
       // follow: the display's scene decides the look
@@ -86,7 +86,7 @@ export function createZones({ state, ha, baseGroups, groups, allLights, haCfg, r
       if (!pid || r?.error) {   // no preset for this scene (or HA refused it): spread the scene's palette across the zone's lights ourselves
         await ha.stopDynamic(z.lights);
         const cols = distinctColors(sc?.palette || ['#ffffff'], z.lights.length);
-        const rs = await Promise.all(z.lights.map((e, i) => ha.lights([e], { color: cols[i], brightness: Math.round(bri * (0.8 + 0.2 * ((i * 0.618) % 1))), transition: 1 }, { key: 'zone-spread:' + e, minGapMs: 0 })));
+        const rs = await Promise.all(z.lights.map((e, i) => ha.lights([e], { color: cols[i], brightness: Math.round(bri * (0.8 + 0.2 * ((i * 0.618) % 1))), transition: 1 }, { key: 'zone-spread:' + e, minGapMs: 0, urgent: true })));
         r = rs.find(x => x.error) || { ok: true }; st.via = 'palette'; st.preset = null;
       }
       for (const g of zoneGroups(z)) { const fx = g.effects?.[scene]; if (fx) ha.lights(g.entities, { effect: fx }, { key: 'zone-fx:' + id + g.name, minGapMs: 0 }); }
@@ -149,7 +149,7 @@ export function createZones({ state, ha, baseGroups, groups, allLights, haCfg, r
       }
       case 'flash': {   // identify a zone: flash its lights
         const z = zs.find(x => x.id === c.id); if (!z) return { error: 'unknown zone ' + c.id };
-        ha.lights(z.lights, { color: hexOk(c.color) ? c.color : '#ffffff', brightness: 255, transition: 0 }, { key: 'zone-flash:' + z.id, minGapMs: 0 });
+        ha.lights(z.lights, { color: hexOk(c.color) ? c.color : '#ffffff', brightness: 255, transition: 0 }, { key: 'zone-flash:' + z.id, minGapMs: 0, urgent: true });
         setTimeout(() => { applied.delete(z.id); sync(); }, 900);   // then put the zone back to what it was doing
         return { ok: true };
       }

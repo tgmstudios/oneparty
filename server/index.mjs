@@ -226,6 +226,8 @@ const broadcast = (type, data) => clients.forEach(c => send(c, type, data));
 const ha = createHA({ url: process.env.HA_URL, token: process.env.HA_TOKEN, host: process.env.HA_HOST || '' });
 if (state.haLocal) ha.connectLocal(state.haLocal).then(r => console.log('[ha] local ' + state.haLocal + ': ' + (r.error || (r.test?.ok ? 'ok via ' + r.base : r.test?.error))), e => console.error('[ha]', e.message));
 const haCfg = event.homeassistant || {};
+ha.setLightOverrides({ stepped: haCfg.steppedLights, smooth: haCfg.smoothLights, gapMs: haCfg.steppedGapMs, minDelta: haCfg.steppedMinDelta });   // optional event.json overrides for lights HA misreports
+ha.lightCaps().then(c => { const n = Object.entries(c).filter(([e, v]) => !v && allLights.includes(e)).map(([e]) => e); if (n.length) console.log('[ha] no fade support, throttled: ' + n.join(', ')); }, () => {});
 const sceneColor = id => state.scenes.find(s => s.id === id)?.palette?.[0];
 // Light groups let slow bulbs (Kasa/Matter) and fast WLED strips behave differently. Legacy flat `lights` = one bulb group.
 const profile = opt('lights', haCfg.profile);
@@ -311,7 +313,7 @@ async function applyLights(sceneId) {
   if (!pid || r.error) {   // fallback: hand each light a different palette color ourselves
     const pal = state.scenes.find(s => s.id === sceneId)?.palette || ['#ffffff'];
     const cols = distinctColors(pal, allLights.length);
-    const rs = await Promise.all(allLights.map((e, i) => ha.lights([e], { color: cols[i], brightness: Math.round(150 + 105 * ((i * 0.618) % 1)), transition: 1 }, { key: 'spread:' + e, minGapMs: 0 })));
+    const rs = await Promise.all(allLights.map((e, i) => ha.lights([e], { color: cols[i], brightness: Math.round(150 + 105 * ((i * 0.618) % 1)), transition: 1 }, { key: 'spread:' + e, minGapMs: 0, urgent: true })));
     r = rs.find(x => x.error) || { ok: true, via: 'palette-spread' };
   }
   groups.forEach(g => { const fx = g.effects?.[sceneId]; if (fx) ha.lights(g.entities, { effect: fx }, { key: 'fx:' + g.name, minGapMs: 0 }); });
@@ -438,7 +440,7 @@ function applyTakeover(id) {
   const L = def?.lights;
   if (!def) return lightsDone('lights back', applyLights(Object.values(state.channels)[0]?.scene));
   if (L.mode === 'off') return lightsDone(def.id, ha.stopDynamic(allLights).then(() => ha.off(allLights)));
-  if (L.mode === 'color') return lightsDone(def.id, ha.stopDynamic(allLights).then(() => ha.lights(allLights, { color: L.color, brightness: L.brightness, transition: 0.3 }, { minGapMs: 0, key: 'takeover' })));
+  if (L.mode === 'color') return lightsDone(def.id, ha.stopDynamic(allLights).then(() => ha.lights(allLights, { color: L.color, brightness: L.brightness, transition: 0.3 }, { minGapMs: 0, key: 'takeover', urgent: true })));
 }
 async function kioskBlackout(on) {
   if (!ha.enabled) return;
@@ -590,7 +592,7 @@ async function command(c) {
         state.lights.preset = c.preset || null; state.lights.mode = 'sync'; if (c.preset) { state.lights.pin = null; if (shows.running()?.source === 'try') shows.stop(); }
       }
       if (c.mode === 'off') out.ha = await lightsDone('off', ha.off(allLights));
-      else if (c.color || c.brightness != null) { state.lights.color = c.color ?? state.lights.color; out.ha = await lightsDone('color', ha.lights(allLights, { color: c.color, brightness: c.brightness }, { minGapMs: 0 })); }
+      else if (c.color || c.brightness != null) { state.lights.color = c.color ?? state.lights.color; out.ha = await lightsDone('color', ha.lights(allLights, { color: c.color, brightness: c.brightness }, { minGapMs: 0, urgent: true })); }
       else if ('preset' in c || 'dynamic' in c || 'autopilot' in c || c.mode === 'sync' || c.apply) out.ha = await lightsDone('preset', applyLights(Object.values(state.channels)[0]?.scene));
       if (c.haScene) out.ha = await lightsDone('ha scene', ha.scene(c.haScene));
       break; }
@@ -679,7 +681,7 @@ async function command(c) {
     case 'display': { const r = displayCmd(c); if (r.error) return r; out = { ...out, ...r }; break; }
     case 'snapshot': return snapshot(c.channel);
     case 'player': { const r = await spotify.control(c); if (r.error) return r; break; }
-    case 'flash': out.ha = await lightsDone('flash', ha.lights(allLights, { color: c.color || '#ffffff', brightness: 255, transition: 0 }, { minGapMs: 0, key: 'flash' })); break;
+    case 'flash': out.ha = await lightsDone('flash', ha.lights(allLights, { color: c.color || '#ffffff', brightness: 255, transition: 0 }, { minGapMs: 0, key: 'flash', urgent: true })); break;
     default: return { error: 'unknown command ' + c.type };
   }
   if (['hud', 'settingsReset', 'scene', 'autoscene', 'display'].includes(c.type)) refreshKioskDashboard().catch(e => console.error('[kiosk dashboard]', e.message));
@@ -1074,6 +1076,8 @@ server.listen(PORT, HOST, () => {
   spotify.start();
   if (state.kiosks.lastCommand?.on) setTimeout(() => refreshKioskDashboard().catch(e => console.error('[kiosk dashboard]', e.message)), 500);
   if (flag('launch')) setTimeout(() => launchDisplays(), 500);
+  // Restored settings only set state: with lights on sync/auto, start the show again instead of waiting for the next scene change.
+  if (ha.enabled && state.lights.mode === 'sync' && !state.takeover) setTimeout(() => { if (state.lights.mode === 'sync' && !state.takeover) lightsDone('resume', applyLights(Object.values(state.channels)[0]?.scene)); }, 3000);
 });
 // ---------- audio stream to remote displays (raw PCM over HTTP; the helper only runs while someone listens) ----------
 const audioStream = createAudioStream({ getDevice: () => state.audioDevice, onChange: () => broadcast('state', publicState()) });
