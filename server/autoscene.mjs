@@ -9,7 +9,7 @@
 // mean of busy [how much is going on] and jumpy [how hard it snaps to the beat]); picks favour scenes whose score is near the song's hype,
 // and a sustained mismatch (hype far from the current scene's) forces a cut.
 // Config lives in state.auto and is persisted with the other live settings.
-export const AUTO_DEFAULTS = { on: false, channel: null, pool: null, bars: 16, minSec: 25, onSong: true, onDrop: true, sens: 4, shuffle: true, hypeMatch: true, hypeSpread: 1.8, mode: 'live' };   // sens 1 (calm) .. 10 (cuts on any hint of a drop)
+export const AUTO_DEFAULTS = { on: false, channel: null, pool: null, bars: 16, minSec: 25, cooldown: 30, onSong: true, onDrop: true, sens: 4, shuffle: true, hypeMatch: true, hypeSpread: 1.8, mode: 'live' };   // sens 1 (calm) .. 10 (cuts on any hint of a drop)
 
 export function createAutoScene({ state, setScene }) {
   const cfg = () => state.auto;
@@ -52,6 +52,7 @@ export function createAutoScene({ state, setScene }) {
     return pool[i];
   }
   async function cut(why, bias = 0) {
+    if (since() < (cfg().cooldown ?? 0)) return;   // hard cooldown after any scene change on the channel (manual or auto), applies to every trigger
     const useHype = cfg().hypeMatch !== false && Date.now() - lastAudio < 3000;
     const id = useHype ? pickHype(bias) : pick(); if (!id) return;
     recent.push(id); if (recent.length > 3) recent.shift();
@@ -122,5 +123,7 @@ export function createAutoScene({ state, setScene }) {
       if (since() >= Math.max(cfg().minSec, cfg().bars * 4 * 60 / Math.max(40, state.bpm))) cut('clock');
     },
     reset() { beats = 0; lastSwitch = Date.now(); },
+    // a scene changed on the auto channel (e.g. picked by hand): restart the cooldown and phrase count
+    noteSwitch(channel) { if (channel === channelId()) { beats = 0; lastSwitch = Date.now(); } },
   };
 }

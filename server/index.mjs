@@ -513,7 +513,7 @@ async function command(c) {
       } catch (e) { return { error: 'Kiosk command failed: ' + e.message }; }
       break;
     }
-    case 'scene': { const ch = state.channels[c.channel]; if (!ch) return { error: 'unknown channel' }; ch.scene = c.scene; ch.mode = c.mode || 'live'; mirrorFrom(c.channel);
+    case 'scene': { const ch = state.channels[c.channel]; if (!ch) return { error: 'unknown channel' }; ch.scene = c.scene; ch.mode = c.mode || 'live'; mirrorFrom(c.channel); autoScene.noteSwitch(c.channel);
       if (c.channel === Object.keys(state.channels)[0] && state.lights.mode === 'sync' && !state.takeover) lightsDone('scene ' + c.scene, applyLights(c.scene));
       break; }
     case 'autoscene': {   // { on?, channel?, pool?: ["02","05"]|null, bars?, minSec?, onSong?, onDrop?, shuffle?, hypeMatch?, hypeSpread?, mode?: "live|cached", now?: true }
@@ -522,6 +522,7 @@ async function command(c) {
       if ('channel' in c) { if (c.channel && !state.channels[c.channel]) return { error: 'unknown channel' }; a.channel = c.channel || null; }
       if ('pool' in c) { const ids = Array.isArray(c.pool) ? c.pool.map(String) : []; if (ids.some(i => !state.scenes.some(s => s.id === i))) return { error: 'unknown scene in pool' }; a.pool = ids.length ? ids : null; }
       if ('bars' in c) a.bars = num(c.bars, 1, 64); if ('minSec' in c) a.minSec = num(c.minSec, 2, 300);
+      if ('cooldown' in c) a.cooldown = num(c.cooldown, 0, 600);
       if ('sens' in c) a.sens = num(c.sens, 1, 10);
       if ('hypeSpread' in c) a.hypeSpread = num(c.hypeSpread, 0.5, 6);
       for (const k of ['onSong', 'onDrop', 'shuffle', 'hypeMatch']) if (k in c) a[k] = !!c[k];
@@ -898,6 +899,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (p === '/api/state') return json(res, 200, publicState());
+    if (p === '/api/queue-lyrics') {   // lyrics for the upcoming Spotify queue (?limit=1..15, default 5), looked up from LRCLIB in parallel
+      const limit = Math.min(15, Math.max(1, +u.searchParams.get('limit') || 5));
+      const q = await spotify.queue().catch(() => null); if (q) { state.queue = q; broadcast('queue', q); }
+      const tracks = (state.queue || []).slice(0, limit);
+      return json(res, 200, { tracks: await Promise.all(tracks.map(async t => ({ id: t.id, title: t.title, artists: t.artists, durationMs: t.durationMs, lyrics: await getLyrics(t).catch(() => null) }))) });
+    }
     if (p === '/api/cmd' && req.method === 'POST') return json(res, 200, await command(JSON.parse((await body(req)).toString())));
     if (p === '/api/audio' && req.method === 'POST') { onAudio(JSON.parse((await body(req)).toString())); res.writeHead(204); return res.end(); }
     if (p === '/api/cache') return json(res, 200, fs.readdirSync(cacheDir).filter(f => /\.(webm|mp4)$/.test(f)));
@@ -1038,7 +1045,7 @@ const HELP = {
     overlay: '{type:"overlay",channel,name:"nowplaying|lyrics",on:true}', channelAudio: '{type:"channelAudio",channel,on:true}  (audio capture + beat detection runs on one display)',
     bake: '{type:"bake",scene:"07"|"all"|"missing",dur?:8}  (awaits; returns file)', draft: '{type:"draft",id,source}  (OFF-AIR scene draft in web/engine/drafts; {id,remove:true} deletes; no id lists)', preview: '{type:"preview",scene:"09",draft?:true,frames?:[0,0.25,0.5,0.75],audio?:"synth|silent|quiet|loud",w?,h?}  (renders off-air in its own window; returns verdict + contact sheet path)', promote: '{type:"promote",id,title?,palette?,force?}  (draft -> real scene; needs a passing preview of the exact source)',
     snapshot: '{type:"snapshot",channel?}  (awaits; returns jpg path to Read)',
-    autoscene: '{type:"autoscene",on:true,bars?:8,minSec?:10,onSong?:true,onDrop?:true,sens?:5,shuffle?:true,pool?:["02","05"]|null,channel?,mode?:"live|cached"}  (music-driven scene cuts: every N bars on the beat, on drops, on new songs)',
+    autoscene: '{type:"autoscene",on:true,bars?:8,minSec?:10,cooldown?:30,onSong?:true,onDrop?:true,sens?:5,shuffle?:true,pool?:["02","05"]|null,channel?,mode?:"live|cached"}  (music-driven scene cuts: every N bars on the beat, on drops, on new songs)',
     bpm: '{type:"bpm",bpm:128}  (manual; turns auto off)', bpmAuto: '{type:"bpmAuto",on:true}  (follow the song tempo via Deezer)', whiteout: '{type:"whiteout",on:true}  (all lights white, displays show only a spinning 3D DAWGHOUSE; kiosks go white)', blackout: '{type:"blackout",on:true}  (also blacks out the HA kiosks)', closeParty: '{type:"closeParty"}  (close kiosk prompts, normal lights, close all displays; scenes: homeassistant.normalScenes, default scene.normal + scene.aiden_lights_normal)', lights: '{type:"lights",mode:"sync|manual|off",color?,brightness?,preset?,dynamic?}', flash: '{type:"flash",color}',
     lightshow: '{type:"lightshow",action:"put|try|play|auto|keep|rm|bind|unbind|read", show?:{...}, id?, scene?, song?}  (authored per-song/scene light programs, see docs/AGENT.md)',
     stream: '{type:"stream",channel,url:"https://youtube.com/watch?v=...|.m3u8|.mp4",sound?:false}  |  {type:"stream",channel,off:true}  (show a YouTube/HLS/video URL; remote displays can also play the hub audio via param hubAudio:true,hubVol:0-1)',

@@ -77,6 +77,8 @@ tool('now_playing', 'The current Spotify track plus its lyrics. For synced lyric
   return text({ track: { id: t.id, title: t.title, artists: t.artists, album: t.album, playing: t.playing, positionMs: Math.round(pos), durationMs: t.durationMs, volume: t.volume }, bpm: s.bpm, bpmInfo: s.bpmInfo, lyrics: L ? { synced: L.synced, current, next, lines: L.lines } : null, queue: s.queue });
 });
 
+tool('queue_lyrics', 'Lyrics for the upcoming songs in the Spotify queue (title, artists, and synced or plain lines, or null if none found). Use it to prepare scenes/lights for what plays next.', { limit: z.number().int().min(1).max(15).default(5) }, async ({ limit }) => text(await api('/api/queue-lyrics?limit=' + limit)));
+
 tool('audio_levels', 'Sample the live audio analysis for a moment: bass/mid/high/level (0-1), beat flags and tempo. Use it to check the visuals have a signal and what the music is doing.', { seconds: z.number().min(0.3).max(10).default(1.5) }, async ({ seconds }) => {
   const a = await sampleAudio(seconds * 1000);
   if (!a.length) return text({ error: 'no audio events received - capture is off or silent', hint: 'check state.audio and audio_devices' });
