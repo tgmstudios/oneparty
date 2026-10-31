@@ -5,9 +5,9 @@ on:
   push:
     branches: [main]
     tags: ['guest-v*']
-    paths: ['public/**', 'deploy/**', '.github/workflows/guest-app-image.yml']
+    paths: ['public/**', 'server/**', 'web/**', 'control/**', 'tools/**', 'events/**', 'package.json', 'package-lock.json', 'deploy/**', '.github/workflows/guest-app-image.yml']
   pull_request:
-    paths: ['public/**', 'deploy/**', '.github/workflows/guest-app-image.yml']
+    paths: ['public/**', 'server/**', 'web/**', 'control/**', 'tools/**', 'events/**', 'package.json', 'package-lock.json', 'deploy/**', '.github/workflows/guest-app-image.yml']
   workflow_dispatch:
 
 permissions:
@@ -33,10 +33,22 @@ jobs:
       - run: npm ci
       - run: npm test
 
-  image:
-    needs: test
-    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+  hub-test:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --test server/*.test.mjs
+      - run: npm run control:build
+
+  image:
+    needs: [test, hub-test]
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'oneparty-runners' }}
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
