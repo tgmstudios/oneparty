@@ -24,7 +24,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: guest
-          image: registry.tgm.one/oneparty/guest@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: registry.tgm.one/oneparty/guest@sha256:afac912401f8a89ef12fabb7e9fe086b49fac445fb3d5b432f20eba99ea1a341
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
