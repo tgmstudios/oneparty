@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: oneparty-east
+  namespace: argocd
+spec:
+  project: oneparty
+  source:
+    repoURL: https://github.com/tgmstudios/oneparty.git
+    targetRevision: main
+    path: deploy/k8s
+  destination:
+    server: https://138.2.213.132:6443
+    namespace: oneparty
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
+    syncOptions:
+      - CreateNamespace=false

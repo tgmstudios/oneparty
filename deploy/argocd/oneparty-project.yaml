@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: oneparty
+  namespace: argocd
+spec:
+  sourceRepos:
+    - https://github.com/tgmstudios/oneparty.git
+  destinations:
+    - server: https://138.2.213.132:6443
+      namespace: oneparty
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: PersistentVolumeClaim
+    - group: apps
+      kind: Deployment
+    - group: networking.k8s.io
+      kind: Ingress
