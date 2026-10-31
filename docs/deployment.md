@@ -6,7 +6,9 @@ The East guest workload is reconciled by Argo CD from `deploy/k8s` on `main`. `d
 
 `.github/workflows/guest-app-image.yml` runs `public/` tests and builds the public guest image from `public/`. Pull requests validate without publishing. Non-PR runs publish to `registry.tgm.one/oneparty/guest` using `HARBOR_USERNAME` and `HARBOR_PASSWORD`; the existing metadata tags are retained (main `latest` and SHA tag, and `guest-v*` release tags). Only a green `main` push or a manual dispatch on `main` promotes. Promotion takes the exact digest output by that run's build, verifies `main` still equals the triggering `github.sha`, pins that digest in `deploy/k8s/deployment.yaml`, then commits and pushes the manifest update. PR builds and guest release-tag builds never promote. Changes under `deploy/**` trigger the pipeline too.
 
-The committed zero digest is a bootstrap placeholder only. CI replaces it with the actual built digest before the Argo Application is created/synced; do not sync while the placeholder remains. The workflow does not build or deploy the hub.
+The deployment is pinned to the digest published by CI. The first successful promotion replaced the bootstrap placeholder before the Argo Application was created; never sync an unbuilt digest. The workflow does not build or deploy the hub.
+
+Hub and guest test jobs run on GitHub-hosted runners. Pull-request image builds also stay hosted and have no publishing step. Main and release image publication uses the repository-scoped `oneparty-runners` ARC scale set on-prem, which can reach Harbor without weakening registry access controls. Its versioned Helm values and operator procedure are in `deploy/runner/`; secrets remain in Kubernetes. Runtime resources in `deploy/k8s` are managed by Argo, while the namespace, credentials, DNS record, and runner release are operator-managed bootstrap resources.
 
 Repository Actions secrets required for image publication: `HARBOR_USERNAME` and `HARBOR_PASSWORD`. Namespace `oneparty` must already contain `harbor-pull` and `oneparty-admin` (key `ADMIN_KEY`). Runtime admin credentials are not stored in Git or sent to CI.
 

@@ -1,0 +1,106 @@
+# Dedicated repository-scoped ARC runner for OneParty image builds.
+# Chart: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+# Keep credentials in the Kubernetes Secret named below; never commit them here.
+githubConfigUrl: https://github.com/tgmstudios/oneparty
+githubConfigSecret: oneparty-github-auth
+runnerScaleSetName: oneparty-runners
+minRunners: 0
+maxRunners: 1
+controllerServiceAccount:
+  name: arc-gha-rs-controller
+  namespace: arc-systems
+template:
+  spec:
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      kubernetes.io/os: linux
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:2.337.0
+        imagePullPolicy: IfNotPresent
+        command: ["sh", "-c", "/home/runner/run.sh"]
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: DOCKER_HOST
+            value: unix:///var/run/docker.sock
+          - name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS
+            value: "120"
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+            ephemeral-storage: 4Gi
+          limits:
+            cpu: "2"
+            memory: 3Gi
+            ephemeral-storage: 8Gi
+        volumeMounts:
+          - name: runner-work
+            mountPath: /home/runner/_work
+          - name: dind-sock
+            mountPath: /var/run
+      - name: dind
+        image: docker.io/library/docker:28.5.2-dind
+        imagePullPolicy: IfNotPresent
+        args:
+          - dockerd
+          - --host=unix:///var/run/docker.sock
+          - --group=$(DOCKER_GROUP_GID)
+          - --feature
+          - containerd-snapshotter=false
+          - --storage-driver=overlay2
+        env:
+          - name: DOCKER_GROUP_GID
+            value: "123"
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            cpu: "1"
+            memory: 2Gi
+            ephemeral-storage: 12Gi
+          limits:
+            cpu: "4"
+            memory: 8Gi
+            ephemeral-storage: 24Gi
+        volumeMounts:
+          - name: dind-sock
+            mountPath: /var/run
+          - name: dind-storage
+            mountPath: /var/lib/docker
+          - name: dind-externals
+            mountPath: /home/runner/externals
+    initContainers:
+      - name: init-runner-storage
+        image: docker.io/library/docker:28.5.2-dind
+        imagePullPolicy: IfNotPresent
+        command: ["sh", "-c"]
+        args:
+          - mkdir -p /runner-data/work /runner-data/dind && chown -R 1001:1001 /runner-data/work && chmod 0775 /runner-data/work && chmod 0711 /runner-data/dind
+        volumeMounts:
+          - name: runner-work
+            mountPath: /runner-data/work
+          - name: dind-storage
+            mountPath: /runner-data/dind
+      - name: init-dind-externals
+        image: ghcr.io/actions/actions-runner:2.337.0
+        imagePullPolicy: IfNotPresent
+        command: ["cp"]
+        args: ["-r", "/home/runner/externals/.", "/home/runner/tmpDir/"]
+        volumeMounts:
+          - name: dind-externals
+            mountPath: /home/runner/tmpDir
+    volumes:
+      - name: runner-work
+        emptyDir:
+          sizeLimit: 8Gi
+      - name: dind-storage
+        emptyDir:
+          sizeLimit: 24Gi
+      - name: dind-sock
+        emptyDir: {}
+      - name: dind-externals
+        emptyDir: {}

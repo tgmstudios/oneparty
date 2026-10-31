@@ -31,17 +31,19 @@ The `Dockerfile` is multi-stage: `npm ci` + build, then a runtime image holding 
 
 ### Docker image
 
-GitHub Actions (`.github/workflows/guest-app-image.yml`) tests, builds and pushes a multi-arch (amd64 + arm64) image to `ghcr.io/<owner>/oneparty-guest`:
+GitHub Actions (`.github/workflows/guest-app-image.yml`) tests both the local hub and guest app, then builds and pushes a multi-arch (amd64 + arm64) image to the private Harbor project at `registry.tgm.one/oneparty/guest`. Main builds pin their exact digest in Git; Argo CD deploys that digest to East at `https://spook.tgm.one`. See `../docs/deployment.md` for the pipeline and runner configuration.
 
 - push to `main` that touches `public/` → `:latest` and `:sha-<short>`
 - git tag `guest-v1.2.3` → `:1.2.3`, `:1.2` and `:latest`
 - pull requests only test and build; nothing is pushed
 
 ```
-docker run -d -p 8080:8080 -e ADMIN_KEY=<24+ random chars> -v guest-data:/data ghcr.io/<owner>/oneparty-guest:latest
+docker run -d -p 8080:8080 -e ADMIN_KEY=<24+ random chars> -v guest-data:/data registry.tgm.one/oneparty/guest:latest
 ```
 
-The first push creates the package as private; make it public (or give your host a pull token) under the repo's Packages settings. The image has a health check on `/healthz` and runs as an unprivileged user. Build locally with `docker build -t oneparty-guest public`.
+The Harbor project is private. Authenticate with its scoped pull robot before pulling; East already has the pull credential in its `harbor-pull` Kubernetes Secret. The image has a health check on `/healthz` and runs as an unprivileged user. Build locally with `docker build -t oneparty-guest public`.
+
+The deployed Hub values are `PARTY_API_URL=https://spook.tgm.one` and `PARTY_PUBLIC_URL=https://spook.tgm.one`. Set `PARTY_API_KEY` to the deployment's `ADMIN_KEY`; never put that value in Git or client-side JavaScript.
 
 Behind a proxy or platform load balancer set `TRUST_PROXY=1` (Secure cookies, real client IPs). Serve it over HTTPS; phones need it for the cookie and the Pay link. The site loads only its own files (CSP `default-src 'self'`): no CDNs, no inline scripts.
 
