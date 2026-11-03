@@ -31,6 +31,22 @@ const fromEntry = (x, want) => {   // synced preferred; if the recording is a di
   if (x.plainLyrics) return { synced: false, lines: x.plainLyrics.split('\n').map(text => ({ t: null, text })) };
   return null;
 };
+const NE = { headers: { 'user-agent': 'Mozilla/5.0', referer: 'https://music.163.com/' }, signal: undefined };
+async function neteaseLyrics(track, titles, artists, want) {
+  try {
+    for (const t of titles) {
+      const q = encodeURIComponent(t + ' ' + (artists[0] || ''));
+      const s = await (await fetch('https://music.163.com/api/search/get?type=1&limit=8&s=' + q, { ...NE, signal: AbortSignal.timeout(8000) })).json();
+      const songs = (s?.result?.songs || []).filter(x => Math.abs((x.duration || 0) / 1000 - want) <= 45).sort((a, b) => Math.abs(a.duration / 1000 - want) - Math.abs(b.duration / 1000 - want));
+      for (const song of songs.slice(0, 3)) {
+        const l = await (await fetch('https://music.163.com/api/song/lyric?lv=1&id=' + song.id, { ...NE, signal: AbortSignal.timeout(8000) })).json();
+        const lines = l?.lrc?.lyric ? parseLrc(l.lrc.lyric).filter(x => x.text && !/^(作词|作曲|编曲|制作人?|监制|混音|母带|词|曲|录音|吉他|Lyrics|Composer|Producer|Arranger|Mix(ed)?|Master(ed)?)\s*[:：]/i.test(x.text)) : [];
+        if (lines.length > 3) { const k = Math.abs(song.duration / 1000 - want) > 6 ? want / (song.duration / 1000) : 1; return { synced: true, approx: k !== 1, lines: k === 1 ? lines : lines.map(x => ({ ...x, t: Math.round(x.t * k) })) }; }
+      }
+    }
+  } catch { /* fall through */ }
+  return null;
+}
 export async function getLyrics(track) {
   if (!track) return null;
   if (cache.has(track.id)) return cache.get(track.id);
@@ -47,6 +63,8 @@ export async function getLyrics(track) {
     best ||= byLen.find(x => x.syncedLyrics && Math.abs((x.duration || 0) - want) <= 45) || (!res ? byLen.find(x => x.plainLyrics) : null);
   }
   if (!res?.synced && best) res = fromEntry(best, want) || res;
+  // 3) fallback when LRCLIB has nothing / is down: NetEase (synced LRC, no key)
+  if (!res) { const r = await neteaseLyrics(track, titles, artists, want); if (r) res = r; else if (!r && failed) failed = true; }
   if (res || !failed) cache.set(track.id, res);   // never cache a failed lookup - the hub retries
   return res;
 }

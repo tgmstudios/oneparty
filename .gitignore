@@ -35,3 +35,4 @@ events/*/settings.local.json
 cookies.txt
 web/engine/drafts/
 web/control/
+__pycache__/

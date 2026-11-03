@@ -277,6 +277,28 @@ export function createHA({ url, token, localIp = '', host = '', log = console.lo
       for (const a of list) if (a.floor) { const f = floors.get(a.floor) || { id: a.floor, name: a.floor_name || a.floor, areas: [], lights: [] }; f.areas.push(a.id); f.lights.push(...a.lights); floors.set(a.floor, f); }
       return { areas: list.map(({ floor_name, ...a }) => a), floors: [...floors.values()].map(f => ({ ...f, lights: [...new Set(f.lights)] })) };
     },
+    // lights that expose a custom effect/scene list (WLED/Tuya strips, string lights, lamps): { 'light.x': ['effect', ...] }. WLED "segment" sub-lights are skipped.
+    async effectLists() {
+      const out = {};
+      for (const s of await this.states()) {
+        if (!/^light\./.test(s.entity_id) || /_segment_\d+$/.test(s.entity_id) || /browser_mod/.test(s.entity_id)) continue;
+        const l = s.attributes?.effect_list; if (Array.isArray(l) && l.length) out[s.entity_id] = l;
+      }
+      return out;
+    },
+    // Per-scene controls of effect lights (Brizlabs string lights: scene speed / palette / direction; they only come online while a scene effect runs).
+    // -> { 'light.x': { speed, palette, direction } } entity ids, found through each light's device.
+    async sceneControls() {
+      if (!enabled) return {};
+      const tpl = "{% set ns = namespace(o={}) %}{% for l in integration_entities('brizlabs') | select('match','light[.]') %}{% set es = device_entities(device_id(l)) %}{% set ns.o = dict(ns.o, **{l: {'speed': es | select('match','number[.].*scene_speed') | first | default(none), 'palette': es | select('match','select[.].*scene_palette') | first | default(none), 'direction': es | select('match','select[.].*scene_direction') | first | default(none)}}) %}{% endfor %}{{ ns.o | tojson }}";
+      try { const r = await hfetch(base() + '/api/template', { method: 'POST', headers, body: JSON.stringify({ template: tpl }), signal: AbortSignal.timeout(10000) }); return r.ok ? JSON.parse(await r.text()) : {}; } catch { return {}; }
+    },
+    async setSceneControls(c, { speed, palette, direction } = {}) {
+      const ok = async (d, s, data) => { try { await call(d, s, data); } catch (e) { log('[ha]', e.message); } };
+      if (c.speed && speed != null) await ok('number', 'set_value', { entity_id: c.speed, value: Math.max(0, Math.min(100, Math.round(speed))) });
+      if (c.palette && palette) await ok('select', 'select_option', { entity_id: c.palette, option: palette });
+      if (c.direction && direction) await ok('select', 'select_option', { entity_id: c.direction, option: direction });
+    },
     async scene(entity_id) { return call('scene', 'turn_on', { entity_id }); },
     async off(lights) { return call('light', 'turn_off', { entity_id: lights }); },
     async states() {

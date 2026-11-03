@@ -41,6 +41,8 @@ export function createZones({ state, ha, baseGroups, groups, allLights, haCfg, r
       dynamic: m.dynamic == null ? null : !!m.dynamic,
       preset: m.preset ? String(m.preset) : null,
       lights: [...new Set((m.lights || []).filter(isLight))],
+      exclude: [...new Set((m.exclude || []).filter(isLight))],   // lights removed by hand from a linked zone: the HA area sync must not re-add them
+      extra: [...new Set((m.extra || []).filter(isLight))],   // lights pinned by hand to a linked zone (not in its HA area): kept across area re-syncs
       link: m.link && ['area', 'floor'].includes(m.link.type) && m.link.id ? { type: m.link.type, id: String(m.link.id) } : null,   // Home Assistant area/floor this zone's lights come from
     };
   }
@@ -61,7 +63,57 @@ export function createZones({ state, ha, baseGroups, groups, allLights, haCfg, r
     return gs;
   };
 
+  // ---- effect lights: strips / string lights / lamps with their own built-in scene list. In follow mode these run a rotating effect
+  // (picked by the music's live hype) instead of a static colour; the rest of the zone still uses presets / palette spread.
+  let fxLists = {}, fxAt = 0, scCtl = {}, scAt = 0, dirFlip = false;
+  const sceneOnly = e => !!scCtl[e];   // lights that drop their scene as soon as colour/brightness is sent (Brizlabs): effect-only commands, no beat pulse
+  const lastFx = new Map();   // entity -> last effect sent (never repeat back-to-back)
+  const refreshFx = async (force) => { if (!ha.enabled || (!force && Date.now() - fxAt < 300000)) return; fxAt = Date.now(); try { fxLists = await ha.effectLists(); scCtl = await ha.sceneControls(); scAt = Date.now(); } catch (e) { log('[zones] effect discovery:', e.message); } };
+  const HOT = /strobe|flash|jump|chase|race|run|shoot|laser|rainbow|energy|rock|pop|kpop|jazz|random|colorful|cycle|loop|wave|marquee|flush|magic|circulate|flicker|shuttle|rebound|fall|pile|flow|music|party|comet|scan|sparkle|twinkle|meteor|fire|blink|bounce/i;
+  const CALM = /breath|fade|gradual|gradient|aurora|ocean|calm|solid|classical|cross fade|pride|sunrise|sunset|glow|pulse|slow|float|flutter|drift/i;
+  const BAD = /^(solid|off|static)$/i;
+  /** pick an effect for a light: hot ones when the music is hyped, calm ones in lulls, never the one already playing */
+  function pickEffect(entity) {
+    const list = (fxLists[entity] || []).filter(e => !BAD.test(e)); if (!list.length) return null;
+    const hype = state.hype?.now ?? 5, hot = list.filter(e => HOT.test(e) && !CALM.test(e)), calm = list.filter(e => CALM.test(e) && !HOT.test(e)), mid = list.filter(e => !hot.includes(e) && !calm.includes(e));
+    const pool = hype >= 6.5 ? (hot.length ? hot : list) : hype <= 3.5 ? (calm.length ? calm : mid.length ? mid : list) : (mid.length ? [...mid, ...hot] : list);
+    const prev = lastFx.get(entity), opts = pool.filter(e => e !== prev), pick = (opts.length ? opts : pool)[Math.floor(Math.random() * (opts.length || pool.length))];
+    lastFx.set(entity, pick); return pick;
+  }
+  const fxOf = z => z.lights.filter(e => fxLists[e]);
+  // Brizlabs-style scene controls: speed follows the music's hype, palette follows the scene's colours, direction alternates each rotation
+  const hueName = hex => { const n = parseInt(hex.slice(1), 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b); if (mx - mn < 40) return 'White'; let h = mx === r ? (g - b) / (mx - mn) * 60 : mx === g ? 120 + (b - r) / (mx - mn) * 60 : 240 + (r - g) / (mx - mn) * 60; h = (h + 360) % 360; return h < 20 || h >= 340 ? 'Red' : h < 45 ? 'Orange' : h < 75 ? 'Yellow' : h < 165 ? 'Green' : h < 200 ? 'Cyan' : h < 265 ? 'Blue' : 'Purple'; };
+  const pickPalette = (cols, opts) => {
+    const names = [...new Set((cols || []).map(hueName))], has = n => opts.find(o => o === n);
+    if (names.length >= 4) return opts.find(o => /^Rainbow/.test(o)) ? opts.filter(o => /^Rainbow/.test(o))[Math.floor(Math.random() * opts.filter(o => /^Rainbow/.test(o)).length)] : null;
+    const combo = opts.find(o => names.length > 1 && names.slice(0, 3).every(n => o.includes(n)) && o.split(/[+,]/).length === Math.min(names.length, 3)) || opts.find(o => names.length > 1 && names.slice(0, 2).every(n => o.includes(n)));
+    return combo || has(names[0]) || null;
+  };
+  async function applySceneControls(ents, palette) {
+    if (Date.now() - scAt > 300000) { scAt = Date.now(); scCtl = await ha.sceneControls(); }
+    dirFlip = !dirFlip; const hype = state.hype?.now ?? 5;
+    setTimeout(() => { for (const e of ents) { const c = scCtl[e]; if (!c) continue;   // the controls only come online once the scene effect is running
+      ha.states().then(all => { const o = all.find(s => s.entity_id === c.palette)?.attributes?.options || []; return ha.setSceneControls(c, { speed: 25 + hype * 7, palette: pickPalette(palette, o), direction: dirFlip ? 'Left' : 'Right' }); }).catch(() => {}); } }, 2500).unref?.();
+  }
+  async function applyEffects(z, ents, cols, bri) {
+    applySceneControls(ents, state.scenes.find(s => s.id === sceneOf(z))?.palette);
+    const rs = await Promise.all(ents.map((e, i) => ha.lights([e], sceneOnly(e) ? { effect: pickEffect(e) } : { effect: pickEffect(e), color: cols[i % cols.length], brightness: Math.round(bri * (0.85 + 0.15 * ((i * 0.618) % 1))), transition: 0.4 }, { key: 'zone-fxrot:' + e, minGapMs: 0, urgent: true })));
+    return rs.find(r => r?.error) || { ok: true };
+  }
+  /** rotate the effects of every follow-mode zone on a timer (haCfg.effectRotateSec, default 24s) */
+  function rotateEffects(force) {
+    if (!ha.enabled || state.takeover || state.lightsHold) return;
+    for (const z of state.zones) {
+      if (z.mode !== 'follow' || !fxOf(z).length) continue;
+      const sc = state.scenes.find(s => s.id === sceneOf(z)), ents = fxOf(z);
+      applyEffects(z, ents, distinctColors(sc?.palette || ['#ffffff'], ents.length), z.brightness ?? haCfg.brightness ?? 180).then(r => { if (state.zoneStatus[z.id]) state.zoneStatus[z.id].effects = Object.fromEntries(ents.map(e => [e, lastFx.get(e)])); });
+    }
+  }
+  setInterval(rotateEffects, Math.max(8, haCfg.effectRotateSec ?? 24) * 1000).unref?.();
+  refreshFx(true).then(() => state.zones?.length && sync(true));
+
   async function applyZone(z) {
+    await refreshFx();
     const id = z.id, st = { at: Date.now(), scene: sceneOf(z), display: display(z), mode: z.mode, lights: z.lights.length };
     state.zoneStatus[id] = st;
     if (!z.lights.length || !ha.enabled) { st.ok = true; st.note = z.lights.length ? 'Home Assistant not configured' : 'no lights in this zone'; return; }
@@ -77,17 +129,23 @@ export function createZones({ state, ha, baseGroups, groups, allLights, haCfg, r
       // follow: the display's scene decides the look
       const scene = sceneOf(z), sc = state.scenes.find(s => s.id === scene), bri = z.brightness ?? haCfg.brightness ?? 180;
       const pid = resolvePreset(z.preset) || resolvePreset(haCfg.presets?.[scene]);
-      const dyn = z.dynamic ?? state.lights.dynamic;
-      let r;
-      if (pid) {
-        r = dyn ? await ha.dynamic(z.lights, pid, { brightness: bri, interval: haCfg.interval ?? 2, transition: haCfg.dynTransition ?? 1 }) : (await ha.stopDynamic(z.lights), await ha.preset(z.lights, pid, { brightness: bri }));
-        st.via = 'preset'; st.preset = presetName(pid);
-      }
-      if (!pid || r?.error) {   // no preset for this scene (or HA refused it): spread the scene's palette across the zone's lights ourselves
-        await ha.stopDynamic(z.lights);
-        const cols = distinctColors(sc?.palette || ['#ffffff'], z.lights.length);
-        const rs = await Promise.all(z.lights.map((e, i) => ha.lights([e], { color: cols[i], brightness: Math.round(bri * (0.8 + 0.2 * ((i * 0.618) % 1))), transition: 1 }, { key: 'zone-spread:' + e, minGapMs: 0, urgent: true })));
-        r = rs.find(x => x.error) || { ok: true }; st.via = 'palette'; st.preset = null;
+      const dyn = false;   // the beat-driven colour stepping (stepColours) replaces the preset shuffle loop, which would fight it
+      const fx = fxOf(z), plain = z.lights.filter(e => !fx.includes(e));   // effect-capable lights always get a rotating effect (preferred over static looks)
+      let r = { ok: true };
+      if (fx.length) { await ha.stopDynamic(fx); r = await applyEffects(z, fx, distinctColors(sc?.palette || ['#ffffff'], fx.length), bri); st.effects = Object.fromEntries(fx.map(e => [e, lastFx.get(e)])); st.via = 'effects'; if (r.error) plain.push(...fx); }
+      if (plain.length) {
+        let r2;
+        if (pid) {
+          r2 = dyn ? await ha.dynamic(plain, pid, { brightness: bri, interval: haCfg.interval ?? 2, transition: haCfg.dynTransition ?? 1 }) : (await ha.stopDynamic(plain), await ha.preset(plain, pid, { brightness: bri }));
+          st.via = (fx.length ? 'effects+' : '') + 'preset'; st.preset = presetName(pid);
+        }
+        if (!pid || r2?.error) {   // no preset for this scene (or HA refused it): spread the scene's palette across the remaining lights ourselves
+          await ha.stopDynamic(plain);
+          const cols = distinctColors(sc?.palette || ['#ffffff'], plain.length);
+          const rs = await Promise.all(plain.map((e, i) => ha.lights([e], { color: cols[i], brightness: Math.round(bri * (0.8 + 0.2 * ((i * 0.618) % 1))), transition: 1 }, { key: 'zone-spread:' + e, minGapMs: 0, urgent: true })));
+          r2 = rs.find(x => x.error) || { ok: true }; st.via = (fx.length ? 'effects+' : '') + 'palette'; st.preset = null;
+        }
+        r = r2;
       }
       for (const g of zoneGroups(z)) { const fx = g.effects?.[scene]; if (fx) ha.lights(g.entities, { effect: fx }, { key: 'zone-fx:' + id + g.name, minGapMs: 0 }); }
       st.ok = !r?.error; if (r?.error) st.error = r.error;
@@ -107,17 +165,34 @@ export function createZones({ state, ha, baseGroups, groups, allLights, haCfg, r
     for (const id of Object.keys(state.zoneStatus)) if (!state.zones.some(z => z.id === id)) delete state.zoneStatus[id];
   }
   /** beat pulse: brighten the zone on each beat, rate-limited per light kind (slow bulbs vs fast strips) */
+  // Plain (non-effect) lights - Matter/TP-Link bulbs that fade - hop to a new palette colour on the beat (every beat when the music is hot, every 2nd/4th when calmer),
+  // with a transition sized to the beat so they glide instead of snapping. The colours are the scene's palette plus hue-shifted variants so there's always something new.
+  const colStep = new Map(), colAt = new Map();
+  const shade = (hex, k) => { const n = parseInt(hex.slice(1), 16); let r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255; const t = k > 0 ? 255 : 0, f = Math.abs(k); r = Math.round(r + (t - r) * f); g = Math.round(g + (t - g) * f); b = Math.round(b + (t - b) * f); return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join(''); };
+  function stepColours(z, a, force) {
+    const plain = z.lights.filter(e => !fxLists[e]); if (!plain.length) return;
+    const now = Date.now(), hype = state.hype?.now ?? 5, every = hype >= 7 ? 1 : hype >= 4 ? 2 : 4;
+    const n = (colStep.get(z.id) || 0) + 1; colStep.set(z.id, n); if (!force && n % every) return;
+    if (now - (colAt.get(z.id) || 0) < 380) return; colAt.set(z.id, now);
+    const sc = state.scenes.find(s => s.id === sceneOf(z)), base = sc?.palette?.length ? sc.palette : ['#ffffff'];
+    const pool = [...distinctColors(base, Math.max(plain.length, 4)), ...base.map(c => shade(c, 0.35)), ...base.map(c => shade(c, -0.35))], bpm = state.bpm || 120;
+    const tr = Math.max(0.25, Math.min(1.2, (60 / bpm) * every * 0.7)), bri = z.brightness ?? haCfg.brightness ?? 180, off = Math.floor(Math.random() * pool.length);
+    plain.forEach((e, i) => ha.lights([e], { color: pool[(off + i * 2 + n) % pool.length], brightness: Math.min(255, Math.round(bri * (0.75 + 0.25 * Math.random()) + 70 * (a?.level ?? 0.5))), transition: tr }, { key: 'zone-col:' + e, minGapMs: 300 }));
+  }
+  setInterval(() => { if (state.takeover || state.lightsHold) return; for (const z of state.zones) if (z.mode === 'follow' && z.lights.length) stepColours(z, null, Date.now() - (colAt.get(z.id) || 0) > 3500); }, 1500).unref?.();   // no beat? still drift every few seconds
   function onBeat(a) {
     if (!a.beat || state.takeover || state.lightsHold) return;
     const now = Date.now(), base = haCfg.brightness ?? 180;
     for (const z of state.zones) {
       if (z.mode !== 'follow' || !z.beat || !z.lights.length) continue;
-      for (const g of zoneGroups(z)) {
+      for (const g0 of zoneGroups(z)) {
+        const g = { ...g0, entities: g0.entities.filter(e => fxLists[e] && !sceneOnly(e)) }; if (!g.entities.length) continue;   // plain lights are colour-stepped below instead
         const key = z.id + ':' + g.name;
         if (!g.beat || now - (lastBeat.get(key) || 0) < g.minGapMs) continue;
         lastBeat.set(key, now);
         ha.lights(g.entities, { brightness: Math.min(255, (z.brightness ?? base) + 90 * a.level), transition: g.transition }, { key: 'zone-beat:' + key, minGapMs: g.minGapMs });
       }
+      stepColours(z, a);
     }
   }
 
@@ -143,8 +218,10 @@ export function createZones({ state, ha, baseGroups, groups, allLights, haCfg, r
       case 'assign': {   // move one light into a zone (zone null/'' = back to the global lights)
         if (!isLight(c.light)) return { error: 'not a light entity: ' + c.light };
         if (c.zone && !zs.some(z => z.id === c.zone)) return { error: 'unknown zone ' + c.zone };
-        for (const z of zs) { z.lights = z.lights.filter(e => e !== c.light); applied.delete(z.id); }
-        if (c.zone) zs.find(z => z.id === c.zone).lights.push(c.light);
+        for (const z of zs) { if (z.link && z.lights.includes(c.light) && c.zone !== z.id) z.exclude = [...new Set([...(z.exclude || []), c.light])]; z.lights = z.lights.filter(e => e !== c.light); applied.delete(z.id); }
+        if (c.zone) { const z = zs.find(z => z.id === c.zone); z.exclude = (z.exclude || []).filter(e => e !== c.light); }
+        for (const z of zs) z.extra = (z.extra || []).filter(e => e !== c.light);
+        if (c.zone) { const z = zs.find(z => z.id === c.zone); z.lights.push(c.light); if (z.link) z.extra = [...(z.extra || []), c.light]; }
         rebuild(); return { ok: true };
       }
       case 'flash': {   // identify a zone: flash its lights
@@ -160,7 +237,7 @@ export function createZones({ state, ha, baseGroups, groups, allLights, haCfg, r
         for (const t of want) {
           if (!t.lights.length) { skipped.push(t.name + ' (no lights)'); continue; }
           const ex = zs.find(z => z.link?.type === kind && z.link.id === t.id);
-          if (ex) { ex.lights = t.lights.slice(); applied.delete(ex.id); made.push(ex.id); continue; }
+          if (ex) { ex.lights = [...new Set([...t.lights.filter(e => !(ex.exclude || []).includes(e)), ...(ex.extra || [])])]; applied.delete(ex.id); made.push(ex.id); continue; }
           let id = slug(t.name), n = 2; while (zs.some(z => z.id === id)) id = slug(t.name) + '-' + n++;
           zs.push(clean({ id, name: t.name, display: guessDisplay(t.name), lights: t.lights, link: { type: kind, id: t.id } })); made.push(id);
         }
@@ -172,8 +249,8 @@ export function createZones({ state, ha, baseGroups, groups, allLights, haCfg, r
           if (!z.link || (c.id && z.id !== c.id)) continue;
           const t = (z.link.type === 'floor' ? c.data?.floors : c.data?.areas)?.find(x => x.id === z.link.id);
           if (!t) { state.zoneStatus[z.id] = { ...state.zoneStatus[z.id], linkNote: 'not found in Home Assistant any more' }; continue; }
-          const same = t.lights.length === z.lights.length && t.lights.every(e => z.lights.includes(e));
-          if (!same) { z.lights = t.lights.slice(); applied.delete(z.id); changed.push(z.id); }
+          const want = [...new Set([...t.lights.filter(e => !(z.exclude || []).includes(e)), ...(z.extra || [])])], same = want.length === z.lights.length && want.every(e => z.lights.includes(e));
+          if (!same) { z.lights = want; applied.delete(z.id); changed.push(z.id); }
           if (state.zoneStatus[z.id]?.linkNote) delete state.zoneStatus[z.id].linkNote;
         }
         if (changed.length) rebuild(); return { ok: true, changed };

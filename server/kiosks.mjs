@@ -47,6 +47,8 @@ export function kioskPopup(state) {
     </article>`).join('');
   const jam = hud.jam?.on && /^https?:\/\//i.test(hud.jam.url || '') ? `<a href="${escape(hud.jam.url)}" target="_blank" rel="noopener noreferrer" style="display:block;padding:22px 0;border-top:1px solid var(--op-border);color:var(--op-accent);font-size:20px;">Join Spotify Jam &#8599;</a>` : '';
   const picture = orientation => state.kioskStreamPath ? `<picture class="op-visual-${orientation}" style="margin-top:28px;margin-left:auto;width:min(100%,760px,68vh);"><source media="(orientation:${orientation})" srcset="${escape(state.kioskStreamPath)}"><img data-oneparty-visual alt="" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" style="display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:var(--op-bg);" /></picture>` : '';
+  const cq = state.contestQr;   // guest-app QR (costume contest / voting / song ratings), same link as the display QR card
+  const contestBlock = cq?.img ? `<div data-oneparty-contest-qr style="display:flex;align-items:center;gap:clamp(18px,3vmin,32px);padding:22px 0;border-top:1px solid var(--op-border);"><img alt="" src="${escape(cq.img)}" style="width:min(30vmin,220px);aspect-ratio:1;background:#fff;padding:8px;border-radius:12px;flex:none;" /><div><h3 style="margin:0;font-size:clamp(25px,4vmin,40px);font-weight:500;color:var(--op-accent);">${escape(cq.title || 'Costume contest')}</h3><p style="margin:10px 0 0;color:var(--op-muted);font-size:clamp(17px,2.5vmin,24px);line-height:1.4;">${escape(cq.sub || 'Scan to enter, vote & rate the music')}</p></div></div>` : '';
   const visual = picture('landscape');
   return {
     title: 'Home Assistant Controllers', tag: 'oneparty-kiosks', initial_style: 'fullscreen', dismissable: false,
@@ -64,7 +66,7 @@ export function kioskPopup(state) {
             ${track?.artists?.length ? `<p style="font-size:clamp(21px,3.4vmin,34px);line-height:1.3;margin:18px 0 0;color:var(--op-muted);">${escape(track.artists.join(', '))}</p>` : ''}
             ${track?.album ? `<p style="font-size:clamp(15px,2vmin,20px);margin:14px 0 0;color:var(--op-muted);line-height:1.4;">${escape(track.album)}</p>` : ''}
           </section>
-          ${announcements || jam || visual ? `<section data-oneparty-announcements style="min-width:0;"><h2 style="${caption}font-weight:normal;margin:0 0 18px;">Announcements</h2>${announcements}${jam}${visual}</section>` : ''}
+          ${announcements || jam || visual || contestBlock ? `<section data-oneparty-announcements style="min-width:0;"><h2 style="${caption}font-weight:normal;margin:0 0 18px;">Announcements</h2>${contestBlock}${announcements}${jam}${visual}</section>` : ''}
         </div>
         ${welcome.length ? `<aside style="border-top:1px solid var(--op-border);padding-top:24px;display:flex;flex-wrap:wrap;gap:16px 40px;">${welcome.map(w => `<p style="margin:0;white-space:pre-wrap;font-size:clamp(18px,2.8vmin,26px);line-height:1.4;color:var(--op-muted);">${escape(w)}</p>`).join('')}</aside>` : ''}
         ${picture('portrait')}

@@ -30,7 +30,7 @@ let kioskRenderer = null, kioskStreamPath = '', kioskTokenAt = 0, kioskRendererA
 // The kiosk <img> holds one long-lived MJPEG connection that dies with the hub. A popup with an unchanged URL doesn't reload it, so the URL carries an
 // epoch that is bumped whenever frames (re)start after a gap; the changed popup makes every kiosk reconnect.
 let kioskStreamEpoch = Date.now();
-function dashboardPopup() { return kioskPopup({ ...state, kioskStreamPath: kioskStreamPath && kioskStreamPath + '&v=' + kioskStreamEpoch }); }
+function dashboardPopup() { return kioskPopup({ ...state, contestQr: null, kioskStreamPath: kioskStreamPath && kioskStreamPath + '&v=' + kioskStreamEpoch }); }
 function kioskFrame(bytes) {
   const gap = Date.now() - kioskStream.status().at, ok = kioskStream.push(bytes);
   if (ok && gap > 8000) { kioskStreamEpoch = Date.now(); refreshKioskDashboard().catch(e => console.error('[kiosk dashboard]', e.message)); }

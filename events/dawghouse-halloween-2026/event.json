@@ -837,17 +837,6 @@
             "light.smart_rgbtw_bulb_5",
             "light.drawer"
           ]
-        },
-        {
-          "name": "bathroom",
-          "kind": "bulb",
-          "entities": [
-            "light.smart_rgbtw_bulb_6",
-            "light.smart_rgbtw_bulb_7",
-            "light.bathroom_light_1",
-            "light.bathroom_light_2",
-            "light.bathroom_light_3"
-          ]
         }
       ],
       "downstairs": [
